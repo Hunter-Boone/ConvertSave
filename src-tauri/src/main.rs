@@ -55,22 +55,11 @@ fn get_available_formats(input_extension: String) -> Vec<ConversionOption> {
                 color: "lavender".to_string(),
             });
         }
-        "png" | "jpg" | "jpeg" | "bmp" | "tiff" => {
-            options.push(ConversionOption {
-                format: "webp".to_string(),
-                tool: "imagemagick".to_string(),
-                display_name: "WebP Image".to_string(),
-                color: "green".to_string(),
-            });
-            options.push(ConversionOption {
-                format: "pdf".to_string(),
-                tool: "imagemagick".to_string(),                display_name: "PDF Document".to_string(),
-                color: "pink".to_string(),
-            });
+        "png" | "jpg" | "jpeg" | "bmp" | "tiff" | "webp" | "gif" => {
             if input_extension != "jpg" && input_extension != "jpeg" {
                 options.push(ConversionOption {
                     format: "jpg".to_string(),
-                    tool: "imagemagick".to_string(),
+                    tool: "ffmpeg".to_string(),
                     display_name: "JPEG Image".to_string(),
                     color: "yellow".to_string(),
                 });
@@ -78,9 +67,33 @@ fn get_available_formats(input_extension: String) -> Vec<ConversionOption> {
             if input_extension != "png" {
                 options.push(ConversionOption {
                     format: "png".to_string(),
-                    tool: "imagemagick".to_string(),
+                    tool: "ffmpeg".to_string(),
                     display_name: "PNG Image".to_string(),
                     color: "orange".to_string(),
+                });
+            }
+            if input_extension != "gif" {
+                options.push(ConversionOption {
+                    format: "gif".to_string(),
+                    tool: "ffmpeg".to_string(),
+                    display_name: "GIF Image".to_string(),
+                    color: "blue".to_string(),
+                });
+            }
+            if input_extension != "bmp" {
+                options.push(ConversionOption {
+                    format: "bmp".to_string(),
+                    tool: "ffmpeg".to_string(),
+                    display_name: "Bitmap Image".to_string(),
+                    color: "light-purple".to_string(),
+                });
+            }
+            if input_extension != "webp" {
+                options.push(ConversionOption {
+                    format: "webp".to_string(),
+                    tool: "ffmpeg".to_string(),
+                    display_name: "WebP Image".to_string(),
+                    color: "green".to_string(),
                 });
             }
         }
@@ -95,7 +108,7 @@ async fn convert_file(
     input_path: String,
     output_format: String,
     output_directory: Option<String>,
-    _advanced_options: Option<String>,
+    advanced_options: Option<String>,
 ) -> Result<String, String> {
     // DEBUG: Print what we're doing
     println!("=== CONVERSION DEBUG ===");
@@ -103,18 +116,16 @@ async fn convert_file(
     println!("Output format: {}", output_format);
     println!("Custom output dir: {:?}", output_directory);
     
-    // This is a placeholder implementation
-    // In production, you would:
-    // 1. Determine which tool to use based on input/output formats
-    // 2. Construct the command with proper arguments
-    // 3. Execute the conversion
-    // 4. Handle errors properly
-    
     let input_path = PathBuf::from(&input_path);
     let file_stem = input_path.file_stem()
         .ok_or("Invalid input file")?
         .to_str()
         .ok_or("Invalid file name")?;
+    
+    let input_extension = input_path.extension()
+        .and_then(|ext| ext.to_str())
+        .unwrap_or("")
+        .to_lowercase();
     
     let output_dir = if let Some(dir) = output_directory {
         PathBuf::from(dir)
@@ -135,15 +146,30 @@ async fn convert_file(
     println!("Output directory: {}", output_dir.to_string_lossy());
     println!("Full output path: {}", output_path.to_string_lossy());
     
-    // WARNING: This is just copying the file, not actually converting it!
-    // We need to implement the real conversion logic
-    println!("WARNING: Currently just copying file, not converting!");
-    std::fs::copy(&input_path, &output_path)
-        .map_err(|e| format!("Failed to copy file: {}", e))?;
+    // Determine which tool to use and perform the actual conversion
+    let output_format_lower = output_format.to_lowercase();
+    println!("Looking for conversion tool: {} -> {}", input_extension, output_format_lower);
+    let conversion_result = match determine_conversion_tool(&input_extension, &output_format_lower) {
+        Some(tool) => {
+            println!("Using {} for conversion", tool);
+            execute_conversion(tool, &input_path, &output_path, advanced_options).await
+        }
+        None => {
+            return Err(format!("No conversion tool available for {} to {}", input_extension, output_format));
+        }
+    };
     
-    println!("=== END DEBUG ===");
-    
-    Ok(format!("File converted successfully to: {}", output_path.to_string_lossy()))
+    match conversion_result {
+        Ok(_) => {
+            println!("=== CONVERSION SUCCESSFUL ===");
+            Ok(format!("File converted successfully to: {}", output_path.to_string_lossy()))
+        }
+        Err(e) => {
+            println!("=== CONVERSION FAILED ===");
+            println!("Error: {}", e);
+            Err(e)
+        }
+    }
 }
 
 #[tauri::command]
@@ -229,6 +255,158 @@ async fn open_folder(path: String) -> Result<(), String> {
     }
     
     Ok(())
+}
+
+fn determine_conversion_tool(input_ext: &str, output_ext: &str) -> Option<&'static str> {
+    // Image conversions - ffmpeg can handle many image formats too
+    let image_inputs = ["jpg", "jpeg", "png", "gif", "bmp", "tiff", "tif", "webp"];
+    let image_outputs = ["jpg", "jpeg", "png", "gif", "bmp", "tiff", "webp"];
+    
+    // Video/Audio conversions
+    let video_inputs = ["mp4", "mov", "avi", "mkv", "webm", "flv", "wmv", "m4v", "mpg", "mpeg", "3gp"];
+    let audio_inputs = ["mp3", "wav", "flac", "ogg", "m4a", "wma", "aac"];
+    let av_outputs = ["mp4", "mov", "avi", "mkv", "webm", "mp3", "wav", "flac", "ogg", "m4a", "aac", "gif"];
+    
+    // Document conversions
+    let doc_inputs = ["md", "markdown", "txt", "html", "htm", "docx", "odt", "rtf", "tex", "latex", "epub", "rst"];
+    let doc_outputs = ["md", "html", "pdf", "docx", "odt", "rtf", "tex", "epub", "txt"];
+    
+    let office_inputs = ["doc", "docx", "xls", "xlsx", "ppt", "pptx", "odt", "ods", "odp", "rtf"];
+    let office_outputs = ["pdf", "html", "txt", "docx", "odt", "rtf"];
+    
+    // Use ffmpeg for both media and image conversions since it's available and versatile
+    if (video_inputs.contains(&input_ext) || audio_inputs.contains(&input_ext)) && av_outputs.contains(&output_ext) {
+        Some("ffmpeg")
+    } else if image_inputs.contains(&input_ext) && image_outputs.contains(&output_ext) {
+        Some("ffmpeg")  // Use ffmpeg for image conversions too
+    } else if doc_inputs.contains(&input_ext) && doc_outputs.contains(&output_ext) {
+        Some("pandoc")
+    } else if office_inputs.contains(&input_ext) && office_outputs.contains(&output_ext) {
+        Some("libreoffice")
+    } else {
+        None
+    }
+}
+
+fn get_tool_path(tool_name: &str) -> Result<PathBuf, String> {
+    let platform_name = if cfg!(target_os = "windows") {
+        "windows"
+    } else if cfg!(target_os = "macos") {
+        "macos"
+    } else {
+        "linux"
+    };
+    
+    let exe_name = match tool_name {
+        "ffmpeg" => {
+            if cfg!(target_os = "windows") {
+                "ffmpeg.exe"
+            } else {
+                "ffmpeg"
+            }
+        }
+        "pandoc" => {
+            if cfg!(target_os = "windows") {
+                "pandoc.exe"
+            } else {
+                "pandoc"
+            }
+        }
+        _ => return Err(format!("Unknown tool: {}", tool_name)),
+    };
+    
+    // Try multiple possible locations
+    let possible_paths = vec![
+        // 1. Project root tools directory (development)
+        std::env::current_dir()
+            .map(|d| d.join("tools").join(platform_name).join(exe_name))
+            .unwrap_or_else(|_| PathBuf::new()),
+        
+        // 2. Relative to executable (production)
+        std::env::current_exe()
+            .map(|exe| exe.parent().unwrap_or(&exe).join("tools").join(platform_name).join(exe_name))
+            .unwrap_or_else(|_| PathBuf::new()),
+        
+        // 3. Parent directory of executable + tools (alternative production layout)
+        std::env::current_exe()
+            .map(|exe| exe.parent().and_then(|p| p.parent()).unwrap_or(&exe).join("tools").join(platform_name).join(exe_name))
+            .unwrap_or_else(|_| PathBuf::new()),
+            
+        // 4. Check if we're in src-tauri directory during development
+        std::env::current_dir()
+            .map(|d| d.parent().unwrap_or(&d).join("tools").join(platform_name).join(exe_name))
+            .unwrap_or_else(|_| PathBuf::new()),
+    ];
+    
+    for path in &possible_paths {
+        if path.exists() {
+            println!("Found tool at: {}", path.display());
+            return Ok(path.clone());
+        }
+    }
+    
+    // If none found, list all the paths we checked
+    let checked_paths: Vec<String> = possible_paths.iter()
+        .map(|p| p.display().to_string())
+        .collect();
+    
+    Err(format!("Tool not found: {} (checked: {})", tool_name, checked_paths.join(", ")))
+}
+
+async fn execute_conversion(
+    tool_name: &str,
+    input_path: &PathBuf,
+    output_path: &PathBuf,
+    advanced_options: Option<String>,
+) -> Result<(), String> {
+    let tool_path = get_tool_path(tool_name)?;
+    
+    println!("Tool path: {}", tool_path.display());
+    println!("Input: {}", input_path.display());
+    println!("Output: {}", output_path.display());
+    
+    let mut command = Command::new(&tool_path);
+    
+    match tool_name {
+        "ffmpeg" => {
+            command.arg("-i").arg(input_path);
+            
+            // Add advanced options if provided
+            if let Some(options) = advanced_options {
+                let options_parts: Vec<&str> = options.split_whitespace().collect();
+                for part in options_parts {
+                    command.arg(part);
+                }
+            }
+            
+            command.arg("-y").arg(output_path); // -y to overwrite output file
+        }
+        "pandoc" => {
+            command.arg(input_path).arg("-o").arg(output_path);
+            
+            // Add advanced options if provided
+            if let Some(options) = advanced_options {
+                let options_parts: Vec<&str> = options.split_whitespace().collect();
+                for part in options_parts {
+                    command.arg(part);
+                }
+            }
+        }
+        _ => return Err(format!("Unknown tool: {}", tool_name)),
+    }
+    
+    println!("Executing command: {:?}", command);
+    
+    let output = command.output()
+        .map_err(|e| format!("Failed to execute {}: {}", tool_name, e))?;
+    
+    if output.status.success() {
+        Ok(())
+    } else {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        Err(format!("Conversion failed:\nSTDOUT: {}\nSTDERR: {}", stdout, stderr))
+    }
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
