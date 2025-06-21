@@ -1,0 +1,6 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+Always use [convertsave_all_documentation.md](mdc:convertsave_all_documentation.md) as reference to what we want in this application

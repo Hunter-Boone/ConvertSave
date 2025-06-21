@@ -1,0 +1,37 @@
+@import url('https://fonts.googleapis.com/css2?family=Ubuntu:wght@500;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  
+  body {
+    @apply bg-background text-primary font-sans font-normal;
+    font-smooth: antialiased;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+}
+
+@layer components {
+  /* Custom chunky button styles */
+  .btn-chunky {
+    @apply font-bold rounded-xl shadow-chunky transition-all duration-200 ease-in-out;
+    @apply hover:shadow-chunky-hover hover:-translate-y-0.5;
+    @apply active:shadow-none active:translate-y-0;
+    @apply disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none disabled:translate-y-0;
+  }
+  
+  /* Drop zone styles */
+  .drop-zone {
+    @apply border-2 border-dashed rounded-xl transition-all duration-200;
+  }
+  
+  .drop-zone-active {
+    @apply border-aquamarine bg-aquamarine/10;
+  }
+}
