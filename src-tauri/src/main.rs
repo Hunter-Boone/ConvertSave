@@ -4,7 +4,6 @@
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::process::Command;
-use tauri::Manager;
 
 #[derive(Debug, Serialize, Deserialize)]
 struct ConversionOption {
@@ -94,7 +93,7 @@ async fn convert_file(
     input_path: String,
     output_format: String,
     output_directory: Option<String>,
-    advanced_options: Option<String>,
+    _advanced_options: Option<String>,
 ) -> Result<String, String> {    // This is a placeholder implementation
     // In production, you would:
     // 1. Determine which tool to use based on input/output formats
@@ -111,8 +110,8 @@ async fn convert_file(
     let output_dir = if let Some(dir) = output_directory {
         PathBuf::from(dir)
     } else {
-        // Default to Documents/ConvertSave/Converted
-        let home = tauri::api::path::document_dir()
+        // Default to Documents/ConvertSave/Converted using dirs crate
+        let home = dirs::document_dir()
             .ok_or("Could not find documents directory")?;
         home.join("ConvertSave").join("Converted")
     };

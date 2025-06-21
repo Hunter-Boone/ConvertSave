@@ -1,5 +1,3 @@
 pub use tauri;
 
-pub fn run() {
-    crate::run();
-}
+// Library functions can be added here as needed
