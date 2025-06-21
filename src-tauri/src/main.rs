@@ -4,6 +4,8 @@
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::process::Command;
+use dirs;
+use serde_json;
 
 #[derive(Debug, Serialize, Deserialize)]
 struct ConversionOption {
@@ -94,7 +96,14 @@ async fn convert_file(
     output_format: String,
     output_directory: Option<String>,
     _advanced_options: Option<String>,
-) -> Result<String, String> {    // This is a placeholder implementation
+) -> Result<String, String> {
+    // DEBUG: Print what we're doing
+    println!("=== CONVERSION DEBUG ===");
+    println!("Input: {}", input_path);
+    println!("Output format: {}", output_format);
+    println!("Custom output dir: {:?}", output_directory);
+    
+    // This is a placeholder implementation
     // In production, you would:
     // 1. Determine which tool to use based on input/output formats
     // 2. Construct the command with proper arguments
@@ -110,10 +119,21 @@ async fn convert_file(
     let output_dir = if let Some(dir) = output_directory {
         PathBuf::from(dir)
     } else {
-        // Default to Documents/ConvertSave/Converted using dirs crate
-        let home = dirs::document_dir()
-            .ok_or("Could not find documents directory")?;
-        home.join("ConvertSave").join("Converted")
+        // For WSL, use Windows Documents directory instead of Linux one
+        let base_dir = if std::env::var("WSL_DISTRO_NAME").is_ok() {
+            // Running in WSL - use Windows Documents folder
+            PathBuf::from("/mnt/c/Users")
+                .join(std::env::var("USER").unwrap_or_else(|_| "Hunter".to_string()))
+                .join("Documents")
+        } else {
+            // Not in WSL - use standard directory resolution
+            dirs::document_dir()
+                .or_else(|| dirs::home_dir().map(|h| h.join("Documents")))
+                .or_else(|| dirs::home_dir())
+                .or_else(|| std::env::current_dir().ok())
+                .ok_or("Could not find a suitable output directory")?
+        };
+        base_dir.join("ConvertSave").join("Converted")
     };
     
     // Create output directory if it doesn't exist
@@ -122,10 +142,70 @@ async fn convert_file(
     
     let output_path = output_dir.join(format!("{}.{}", file_stem, output_format));
     
-    // Placeholder: In reality, you'd execute the appropriate conversion tool here
-    // For now, we'll just return the output path
-    Ok(output_path.to_string_lossy().to_string())
+    // DEBUG: Print the paths
+    println!("Output directory: {}", output_dir.to_string_lossy());
+    println!("Full output path: {}", output_path.to_string_lossy());
+    
+    // WARNING: This is just copying the file, not actually converting it!
+    // We need to implement the real conversion logic
+    println!("WARNING: Currently just copying file, not converting!");
+    std::fs::copy(&input_path, &output_path)
+        .map_err(|e| format!("Failed to copy file: {}", e))?;
+    
+    println!("=== END DEBUG ===");
+    
+    Ok(format!("File converted successfully to: {}", output_path.to_string_lossy()))
 }
+
+#[tauri::command]
+async fn get_file_info(path: String) -> Result<serde_json::Value, String> {
+    let path = PathBuf::from(&path);
+    let metadata = std::fs::metadata(&path)
+        .map_err(|e| format!("Failed to get file metadata: {}", e))?;
+    
+    let file_name = path.file_name()
+        .ok_or("Could not get file name")?
+        .to_str()
+        .ok_or("Invalid file name")?;
+    
+    let extension = path.extension()
+        .and_then(|ext| ext.to_str())
+        .unwrap_or("");
+    
+    let file_info = serde_json::json!({
+        "name": file_name,
+        "size": metadata.len(),
+        "extension": extension
+    });
+    
+    Ok(file_info)
+}
+
+#[tauri::command]
+async fn test_directories() -> Result<serde_json::Value, String> {
+    let mut info = serde_json::Map::new();
+    
+    if let Some(docs) = dirs::document_dir() {
+        info.insert("documents".to_string(), serde_json::Value::String(docs.to_string_lossy().to_string()));
+    } else {
+        info.insert("documents".to_string(), serde_json::Value::Null);
+    }
+    
+    if let Some(home) = dirs::home_dir() {
+        info.insert("home".to_string(), serde_json::Value::String(home.to_string_lossy().to_string()));
+    } else {
+        info.insert("home".to_string(), serde_json::Value::Null);
+    }
+    
+    if let Ok(current) = std::env::current_dir() {
+        info.insert("current".to_string(), serde_json::Value::String(current.to_string_lossy().to_string()));
+    } else {
+        info.insert("current".to_string(), serde_json::Value::Null);
+    }
+    
+    Ok(serde_json::Value::Object(info))
+}
+
 #[tauri::command]
 async fn open_folder(path: String) -> Result<(), String> {
     let path = PathBuf::from(path);
@@ -161,6 +241,7 @@ async fn open_folder(path: String) -> Result<(), String> {
     
     Ok(())
 }
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -170,6 +251,8 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             get_available_formats,
             convert_file,
+            get_file_info,
+            test_directories,
             open_folder
         ])
         .run(tauri::generate_context!())

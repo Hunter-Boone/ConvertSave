@@ -10,6 +10,14 @@
     "core:window:allow-minimize",
     "core:window:allow-toggle-maximize",
     "dialog:default",
-    "dialog:allow-open"
+    "dialog:allow-open",
+    "fs:default",
+    "fs:allow-mkdir",
+    "fs:allow-read-dir",
+    "fs:allow-read-file",
+    "fs:allow-write-file",
+    "fs:allow-stat",
+    "shell:default",
+    "shell:allow-open"
   ]
 }

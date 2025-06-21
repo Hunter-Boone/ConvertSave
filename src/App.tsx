@@ -55,21 +55,24 @@ function App() {
     setConversionResult(null);
 
     try {
+      let lastOutputPath = "";
       // Convert each file
       for (let i = 0; i < selectedFiles.length; i++) {
         const file = selectedFiles[i];
-        await invoke("convert_file", {
+        const result = await invoke<string>("convert_file", {
           inputPath: file.path,
           outputFormat: selectedFormat,
           outputDirectory: outputDirectory || undefined,
           advancedOptions: advancedOptions || undefined,
         });
+        lastOutputPath = result;
         setConversionProgress(((i + 1) / selectedFiles.length) * 100);
       }
 
       setConversionResult({
         success: true,
         message: `Successfully converted ${selectedFiles.length} file(s)!`,
+        outputPath: lastOutputPath,
       });
     } catch (error) {
       setConversionResult({
@@ -235,6 +238,30 @@ function App() {
       }
     } catch (error) {
       console.error("Error opening file dialog:", error);
+    }
+  };
+
+  const testDirectories = async () => {
+    try {
+      const result = await invoke("test_directories");
+      console.log("Directory test result:", result);
+      alert(
+        "Directory test result (check console): " +
+          JSON.stringify(result, null, 2)
+      );
+    } catch (error) {
+      console.error("Directory test failed:", error);
+      alert("Directory test failed: " + error);
+    }
+  };
+
+  const openOutputFolder = async () => {
+    if (conversionResult?.outputPath) {
+      try {
+        await invoke("open_folder", { path: conversionResult.outputPath });
+      } catch (error) {
+        console.error("Failed to open folder:", error);
+      }
     }
   };
 
@@ -627,7 +654,7 @@ function App() {
 
           {/* Convert Button */}
           {selectedFiles.length > 0 && (
-            <div className="text-center">
+            <div className="text-center space-y-2">
               <button
                 onClick={handleConvert}
                 disabled={isConverting}
@@ -636,6 +663,12 @@ function App() {
                 {isConverting
                   ? "Converting..."
                   : `Convert ${selectedFiles.length} file(s)`}
+              </button>
+              <button
+                onClick={testDirectories}
+                className="btn-chunky bg-light-grey text-dark-purple px-4 py-2 text-sm"
+              >
+                Debug Directories
               </button>
             </div>
           )}
@@ -654,7 +687,7 @@ function App() {
           {conversionResult && (
             <div
               className={`
-              p-4 rounded-xl font-normal text-center
+              p-4 rounded-xl font-normal text-center space-y-3
               ${
                 conversionResult.success
                   ? "bg-aquamarine text-dark-purple"
@@ -663,6 +696,19 @@ function App() {
             `}
             >
               <p className="font-bold">{conversionResult.message}</p>
+              {conversionResult.success && conversionResult.outputPath && (
+                <>
+                  <p className="text-sm">
+                    Output: {conversionResult.outputPath}
+                  </p>
+                  <button
+                    onClick={openOutputFolder}
+                    className="btn-chunky bg-dark-purple text-off-white px-4 py-2 text-sm"
+                  >
+                    Open Output Folder
+                  </button>
+                </>
+              )}
             </div>
           )}
         </div>
