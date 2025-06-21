@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import DropZone from "./components/DropZone";
@@ -18,6 +18,19 @@ function App() {
     message: string;
     outputPath?: string;
   } | null>(null);
+  const [currentPlatform, setCurrentPlatform] = useState<string>("windows");
+
+  useEffect(() => {
+    // Detect platform using user agent as a fallback
+    const userAgent = navigator.userAgent.toLowerCase();
+    if (userAgent.includes("mac")) {
+      setCurrentPlatform("macos");
+    } else if (userAgent.includes("linux")) {
+      setCurrentPlatform("linux");
+    } else {
+      setCurrentPlatform("windows");
+    }
+  }, []);
 
   const handleFileSelect = (file: FileInfo) => {
     setSelectedFiles((prev) => [...prev, file]);
@@ -91,6 +104,141 @@ function App() {
     await window.close();
   };
 
+  // Platform-specific window control components
+  const MacOSControls = () => (
+    <div className="flex items-center space-x-2">
+      <button
+        onClick={handleClose}
+        className="w-3 h-3 bg-pink rounded-full hover:bg-red-500 transition-colors focus:outline-none"
+        aria-label="Close"
+      ></button>
+      <button
+        onClick={handleMinimize}
+        className="w-3 h-3 bg-yellow rounded-full hover:bg-yellow-400 transition-colors focus:outline-none"
+        aria-label="Minimize"
+      ></button>
+      <button
+        onClick={handleMaximize}
+        className="w-3 h-3 bg-aquamarine rounded-full border border-dark-purple hover:bg-green-400 transition-colors focus:outline-none"
+        aria-label="Maximize"
+      ></button>
+    </div>
+  );
+
+  const WindowsControls = () => (
+    <div className="flex items-center">
+      <button
+        onClick={handleMinimize}
+        className="w-12 h-8 hover:bg-dark-purple hover:bg-opacity-10 flex items-center justify-center transition-colors focus:outline-none"
+        aria-label="Minimize"
+      >
+        <svg
+          width="10"
+          height="1"
+          viewBox="0 0 10 1"
+          fill="currentColor"
+          className="text-dark-purple"
+        >
+          <rect width="10" height="1" />
+        </svg>
+      </button>
+      <button
+        onClick={handleMaximize}
+        className="w-12 h-8 hover:bg-dark-purple hover:bg-opacity-10 flex items-center justify-center transition-colors focus:outline-none"
+        aria-label="Maximize"
+      >
+        <svg
+          width="10"
+          height="10"
+          viewBox="0 0 10 10"
+          fill="none"
+          className="text-dark-purple"
+        >
+          <rect
+            x="0"
+            y="0"
+            width="10"
+            height="10"
+            stroke="currentColor"
+            strokeWidth="1"
+            fill="none"
+          />
+        </svg>
+      </button>
+      <button
+        onClick={handleClose}
+        className="w-12 h-8 hover:bg-red-500 hover:text-white flex items-center justify-center transition-colors focus:outline-none"
+        aria-label="Close"
+      >
+        <svg
+          width="10"
+          height="10"
+          viewBox="0 0 10 10"
+          fill="none"
+          className="stroke-current"
+        >
+          <path d="M1 1L9 9M9 1L1 9" stroke="currentColor" strokeWidth="1" />
+        </svg>
+      </button>
+    </div>
+  );
+
+  const LinuxControls = () => (
+    <div className="flex items-center">
+      <button
+        onClick={handleMinimize}
+        className="w-8 h-8 hover:bg-dark-purple hover:bg-opacity-10 flex items-center justify-center transition-colors focus:outline-none"
+        aria-label="Minimize"
+      >
+        <svg
+          width="12"
+          height="2"
+          viewBox="0 0 12 2"
+          fill="currentColor"
+          className="text-dark-purple"
+        >
+          <rect width="12" height="2" />
+        </svg>
+      </button>
+      <button
+        onClick={handleMaximize}
+        className="w-8 h-8 hover:bg-dark-purple hover:bg-opacity-10 flex items-center justify-center transition-colors focus:outline-none"
+        aria-label="Maximize"
+      >
+        <svg
+          width="12"
+          height="12"
+          viewBox="0 0 12 12"
+          fill="none"
+          className="text-dark-purple"
+        >
+          <rect
+            x="1"
+            y="1"
+            width="10"
+            height="10"
+            stroke="currentColor"
+            strokeWidth="1.5"
+            fill="none"
+          />
+        </svg>
+      </button>
+      <button
+        onClick={handleClose}
+        className="w-8 h-8 hover:bg-red-500 hover:text-white flex items-center justify-center transition-colors focus:outline-none"
+        aria-label="Close"
+      >
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+          <path
+            d="M2 2L10 10M10 2L2 10"
+            stroke="currentColor"
+            strokeWidth="1.5"
+          />
+        </svg>
+      </button>
+    </div>
+  );
+
   return (
     <div className="min-h-screen bg-off-white">
       {/* Custom Title Bar */}
@@ -98,26 +246,22 @@ function App() {
         className="bg-aquamarine px-4 py-2 flex items-center justify-between select-none"
         data-tauri-drag-region
       >
+        {/* Left side - Controls on macOS, Title on Windows/Linux */}
         <div className="flex items-center space-x-4">
-          <div className="flex items-center space-x-2">
-            <button
-              onClick={handleClose}
-              className="w-3 h-3 bg-pink rounded-full hover:bg-red-500 transition-colors focus:outline-none"
-              aria-label="Close"
-            ></button>
-            <button
-              onClick={handleMinimize}
-              className="w-3 h-3 bg-yellow rounded-full hover:bg-yellow-400 transition-colors focus:outline-none"
-              aria-label="Minimize"
-            ></button>
-            <button
-              onClick={handleMaximize}
-              className="w-3 h-3 bg-aquamarine rounded-full border border-dark-purple hover:bg-green-400 transition-colors focus:outline-none"
-              aria-label="Maximize"
-            ></button>
-          </div>
-          <div className="text-dark-purple font-bold text-sm">ConvertSave</div>
+          {currentPlatform === "macos" && <MacOSControls />}
+          {currentPlatform !== "macos" && (
+            <div className="text-dark-purple font-bold text-sm">
+              ConvertSave
+            </div>
+          )}
         </div>
+
+        {/* Center - Title on macOS */}
+        {currentPlatform === "macos" && (
+          <div className="text-dark-purple font-bold text-sm">ConvertSave</div>
+        )}
+
+        {/* Right side - Always has Update button, Controls on Windows/Linux */}
         <div className="flex items-center space-x-2">
           <button className="btn-chunky bg-yellow text-dark-purple px-3 py-1 text-sm">
             Update Available
@@ -127,6 +271,8 @@ function App() {
               <path d="M8 4.5a.5.5 0 0 1 .5.5v3h3a.5.5 0 0 1 0 1h-3v3a.5.5 0 0 1-1 0v-3h-3a.5.5 0 0 1 0-1h3v-3A.5.5 0 0 1 8 4.5z" />
             </svg>
           </button>
+          {currentPlatform === "windows" && <WindowsControls />}
+          {currentPlatform === "linux" && <LinuxControls />}
         </div>
       </div>
 
