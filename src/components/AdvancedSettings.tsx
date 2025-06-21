@@ -40,7 +40,7 @@ export default function AdvancedSettings({
             type="text"
             value={outputDirectory}
             readOnly
-            placeholder="Default: Documents/ConvertSave/Converted"
+            placeholder="Default: Same directory as input file"
             className="flex-1 px-4 py-2 bg-surface border border-light-grey rounded-lg text-primary font-normal"
           />
           <button
@@ -56,7 +56,11 @@ export default function AdvancedSettings({
         onClick={() => setIsExpanded(!isExpanded)}
         className="flex items-center gap-2 text-sm text-secondary hover:text-primary transition-colors font-normal"
       >
-        {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+        {isExpanded ? (
+          <ChevronUp className="w-4 h-4" />
+        ) : (
+          <ChevronDown className="w-4 h-4" />
+        )}
         Advanced Options
       </button>
 
@@ -74,7 +78,8 @@ export default function AdvancedSettings({
             rows={3}
           />
           <p className="text-xs text-secondary font-normal">
-            Enter command-line arguments for the conversion tool. These will be passed directly to the underlying converter.
+            Enter command-line arguments for the conversion tool. These will be
+            passed directly to the underlying converter.
           </p>
         </div>
       )}

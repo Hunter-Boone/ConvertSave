@@ -119,21 +119,10 @@ async fn convert_file(
     let output_dir = if let Some(dir) = output_directory {
         PathBuf::from(dir)
     } else {
-        // For WSL, use Windows Documents directory instead of Linux one
-        let base_dir = if std::env::var("WSL_DISTRO_NAME").is_ok() {
-            // Running in WSL - use Windows Documents folder
-            PathBuf::from("/mnt/c/Users")
-                .join(std::env::var("USER").unwrap_or_else(|_| "Hunter".to_string()))
-                .join("Documents")
-        } else {
-            // Not in WSL - use standard directory resolution
-            dirs::document_dir()
-                .or_else(|| dirs::home_dir().map(|h| h.join("Documents")))
-                .or_else(|| dirs::home_dir())
-                .or_else(|| std::env::current_dir().ok())
-                .ok_or("Could not find a suitable output directory")?
-        };
-        base_dir.join("ConvertSave").join("Converted")
+        // Default to the same directory as the input file
+        input_path.parent()
+            .ok_or("Could not determine input file directory")?
+            .to_path_buf()
     };
     
     // Create output directory if it doesn't exist
