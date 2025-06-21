@@ -55,7 +55,8 @@ fn get_available_formats(input_extension: String) -> Vec<ConversionOption> {
                 color: "lavender".to_string(),
             });
         }
-        "png" | "jpg" | "jpeg" | "bmp" | "tiff" | "webp" | "gif" => {
+        "png" | "jpg" | "jpeg" | "bmp" | "tiff" | "webp" | "gif" | "tga" | "ppm" | "pgm" | "pbm" | "pam" | "xbm" | "xpm" | "dds" | "dpx" | "exr" | "hdr" | "ico" | "j2k" | "jp2" | "pcx" | "pfm" | "sgi" | "sun" | "xwd" => {
+            // Standard formats
             if input_extension != "jpg" && input_extension != "jpeg" {
                 options.push(ConversionOption {
                     format: "jpg".to_string(),
@@ -94,6 +95,154 @@ fn get_available_formats(input_extension: String) -> Vec<ConversionOption> {
                     tool: "ffmpeg".to_string(),
                     display_name: "WebP Image".to_string(),
                     color: "green".to_string(),
+                });
+            }
+            if input_extension != "tiff" {
+                options.push(ConversionOption {
+                    format: "tiff".to_string(),
+                    tool: "ffmpeg".to_string(),
+                    display_name: "TIFF Image".to_string(),
+                    color: "light-tan".to_string(),
+                });
+            }
+            
+            // Professional/High-end formats
+            if input_extension != "tga" {
+                options.push(ConversionOption {
+                    format: "tga".to_string(),
+                    tool: "ffmpeg".to_string(),
+                    display_name: "Targa Image".to_string(),
+                    color: "pink".to_string(),
+                });
+            }
+            if input_extension != "exr" {
+                options.push(ConversionOption {
+                    format: "exr".to_string(),
+                    tool: "ffmpeg".to_string(),
+                    display_name: "OpenEXR (HDR)".to_string(),
+                    color: "aquamarine".to_string(),
+                });
+            }
+            if input_extension != "hdr" {
+                options.push(ConversionOption {
+                    format: "hdr".to_string(),
+                    tool: "ffmpeg".to_string(),
+                    display_name: "Radiance HDR".to_string(),
+                    color: "aquamarine".to_string(),
+                });
+            }
+            if input_extension != "dpx" {
+                options.push(ConversionOption {
+                    format: "dpx".to_string(),
+                    tool: "ffmpeg".to_string(),
+                    display_name: "Digital Picture Exchange".to_string(),
+                    color: "pink".to_string(),
+                });
+            }
+            
+            // JPEG 2000 formats
+            if input_extension != "j2k" && input_extension != "jp2" {
+                options.push(ConversionOption {
+                    format: "j2k".to_string(),
+                    tool: "ffmpeg".to_string(),
+                    display_name: "JPEG 2000".to_string(),
+                    color: "yellow".to_string(),
+                });
+            }
+            
+            // Legacy/Specialized formats
+            if input_extension != "pcx" {
+                options.push(ConversionOption {
+                    format: "pcx".to_string(),
+                    tool: "ffmpeg".to_string(),
+                    display_name: "PCX Image".to_string(),
+                    color: "light-purple".to_string(),
+                });
+            }
+            if input_extension != "ico" {
+                options.push(ConversionOption {
+                    format: "ico".to_string(),
+                    tool: "ffmpeg".to_string(),
+                    display_name: "Windows Icon".to_string(),
+                    color: "blue".to_string(),
+                });
+            }
+            if input_extension != "sgi" {
+                options.push(ConversionOption {
+                    format: "sgi".to_string(),
+                    tool: "ffmpeg".to_string(),
+                    display_name: "Silicon Graphics Image".to_string(),
+                    color: "green".to_string(),
+                });
+            }
+            
+            // Raw/Uncompressed formats
+            if input_extension != "ppm" {
+                options.push(ConversionOption {
+                    format: "ppm".to_string(),
+                    tool: "ffmpeg".to_string(),
+                    display_name: "Portable Pixmap".to_string(),
+                    color: "light-tan".to_string(),
+                });
+            }
+            if input_extension != "pgm" {
+                options.push(ConversionOption {
+                    format: "pgm".to_string(),
+                    tool: "ffmpeg".to_string(),
+                    display_name: "Portable Graymap".to_string(),
+                    color: "light-tan".to_string(),
+                });
+            }
+            if input_extension != "pbm" {
+                options.push(ConversionOption {
+                    format: "pbm".to_string(),
+                    tool: "ffmpeg".to_string(),
+                    display_name: "Portable Bitmap".to_string(),
+                    color: "light-tan".to_string(),
+                });
+            }
+            if input_extension != "pam" {
+                options.push(ConversionOption {
+                    format: "pam".to_string(),
+                    tool: "ffmpeg".to_string(),
+                    display_name: "Portable Arbitrary Map".to_string(),
+                    color: "light-tan".to_string(),
+                });
+            }
+            
+            // X Window System formats
+            if input_extension != "xbm" {
+                options.push(ConversionOption {
+                    format: "xbm".to_string(),
+                    tool: "ffmpeg".to_string(),
+                    display_name: "X11 Bitmap".to_string(),
+                    color: "light-purple".to_string(),
+                });
+            }
+            if input_extension != "xpm" {
+                options.push(ConversionOption {
+                    format: "xpm".to_string(),
+                    tool: "ffmpeg".to_string(),
+                    display_name: "X11 Pixmap".to_string(),
+                    color: "light-purple".to_string(),
+                });
+            }
+            if input_extension != "xwd" {
+                options.push(ConversionOption {
+                    format: "xwd".to_string(),
+                    tool: "ffmpeg".to_string(),
+                    display_name: "X Window Dump".to_string(),
+                    color: "light-purple".to_string(),
+                });
+            }
+            
+            // Gaming/3D formats
+            if input_extension != "dds" {
+                options.push(ConversionOption {
+                    format: "dds".to_string(),
+                    tool: "ffmpeg".to_string(),
+                    display_name: "DirectDraw Surface".to_string(),
+                    color: "blue".to_string(),
                 });
             }
         }
@@ -258,9 +407,39 @@ async fn open_folder(path: String) -> Result<(), String> {
 }
 
 fn determine_conversion_tool(input_ext: &str, output_ext: &str) -> Option<&'static str> {
-    // Image conversions - ffmpeg can handle many image formats too
-    let image_inputs = ["jpg", "jpeg", "png", "gif", "bmp", "tiff", "tif", "webp"];
-    let image_outputs = ["jpg", "jpeg", "png", "gif", "bmp", "tiff", "webp"];
+    // Image conversions - ffmpeg can handle many image formats
+    let image_inputs = [
+        // Standard formats
+        "jpg", "jpeg", "png", "gif", "bmp", "tiff", "tif", "webp",
+        // Professional/High-end formats
+        "tga", "exr", "hdr", "dpx", "pfm",
+        // JPEG 2000
+        "j2k", "jp2",
+        // Legacy/Specialized formats
+        "pcx", "ico", "sgi", "sun",
+        // Raw/Uncompressed formats
+        "ppm", "pgm", "pbm", "pam",
+        // X Window System formats
+        "xbm", "xpm", "xwd",
+        // Gaming/3D formats
+        "dds"
+    ];
+    let image_outputs = [
+        // Standard formats
+        "jpg", "jpeg", "png", "gif", "bmp", "tiff", "tif", "webp",
+        // Professional/High-end formats
+        "tga", "exr", "hdr", "dpx", "pfm",
+        // JPEG 2000
+        "j2k", "jp2",
+        // Legacy/Specialized formats
+        "pcx", "ico", "sgi", "sun",
+        // Raw/Uncompressed formats
+        "ppm", "pgm", "pbm", "pam",
+        // X Window System formats
+        "xbm", "xpm", "xwd",
+        // Gaming/3D formats
+        "dds"
+    ];
     
     // Video/Audio conversions
     let video_inputs = ["mp4", "mov", "avi", "mkv", "webm", "flv", "wmv", "m4v", "mpg", "mpeg", "3gp"];
@@ -278,7 +457,7 @@ fn determine_conversion_tool(input_ext: &str, output_ext: &str) -> Option<&'stat
     if (video_inputs.contains(&input_ext) || audio_inputs.contains(&input_ext)) && av_outputs.contains(&output_ext) {
         Some("ffmpeg")
     } else if image_inputs.contains(&input_ext) && image_outputs.contains(&output_ext) {
-        Some("ffmpeg")  // Use ffmpeg for image conversions too
+        Some("ffmpeg")  // Use ffmpeg for image conversions
     } else if doc_inputs.contains(&input_ext) && doc_outputs.contains(&output_ext) {
         Some("pandoc")
     } else if office_inputs.contains(&input_ext) && office_outputs.contains(&output_ext) {
