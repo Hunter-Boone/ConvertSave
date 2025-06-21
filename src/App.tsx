@@ -413,72 +413,139 @@ function App() {
       {/* Main Content Area */}
       <div className="flex-1 overflow-y-auto overflow-x-hidden">
         <div className="p-6 space-y-6">
-          {/* Main Drop Zone */}
-          <div className="border-2 border-dashed border-light-purple rounded-xl p-12 text-center bg-white">
-            <div className="space-y-4">
-              <div className="w-16 h-16 mx-auto bg-light-grey rounded-lg flex items-center justify-center">
-                <svg
-                  width="32"
-                  height="32"
-                  viewBox="0 0 32 32"
-                  fill="none"
-                  className="text-light-purple"
-                >
-                  <rect
-                    x="4"
-                    y="8"
-                    width="20"
-                    height="16"
-                    rx="2"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                  />
-                  <circle
-                    cx="10"
-                    cy="14"
-                    r="2"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                  />
-                  <path
-                    d="M20 20l-4-4-6 6"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                  />
-                </svg>
-              </div>
-              <div className="space-y-2">
-                <p className="text-lg font-bold text-dark-purple">
-                  Drag-and-drop images here.
-                </p>
-                <button
-                  onClick={handleBrowseFiles}
-                  className="btn-chunky bg-light-grey text-dark-purple px-6 py-2 hover:bg-light-purple hover:bg-opacity-20"
-                >
-                  Browse files
-                </button>
+          {/* Show drag zone when no files are selected, or a smaller version when files are present */}
+          {selectedFiles.length === 0 ? (
+            /* Main Drop Zone - Full Size */
+            <div className="border-2 border-dashed border-light-purple rounded-xl p-16 text-center bg-white">
+              <div className="space-y-6">
+                <div className="w-20 h-20 mx-auto bg-light-grey rounded-lg flex items-center justify-center">
+                  <svg
+                    width="40"
+                    height="40"
+                    viewBox="0 0 40 40"
+                    fill="none"
+                    className="text-light-purple"
+                  >
+                    <rect
+                      x="5"
+                      y="10"
+                      width="25"
+                      height="20"
+                      rx="2"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                    />
+                    <circle
+                      cx="12"
+                      cy="17"
+                      r="2"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                    />
+                    <path
+                      d="M25 25l-5-5-7.5 7.5"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                    />
+                  </svg>
+                </div>
+                <div className="space-y-3">
+                  <h2 className="text-2xl font-bold text-dark-purple">
+                    Drop your files here to convert
+                  </h2>
+                  <p className="text-lg text-light-purple">
+                    Support for images, videos, audio, and documents
+                  </p>
+                  <button
+                    onClick={handleBrowseFiles}
+                    className="btn-chunky bg-aquamarine text-dark-purple px-8 py-3 text-lg hover:bg-opacity-80"
+                  >
+                    Choose Files
+                  </button>
+                </div>
               </div>
             </div>
-          </div>
+          ) : (
+            /* Compact Drop Zone */
+            <div className="border-2 border-dashed border-light-purple rounded-xl p-6 text-center bg-white">
+              <div className="flex items-center justify-center space-x-4">
+                <div className="w-12 h-12 bg-light-grey rounded-lg flex items-center justify-center">
+                  <svg
+                    width="24"
+                    height="24"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    className="text-light-purple"
+                  >
+                    <rect
+                      x="3"
+                      y="6"
+                      width="15"
+                      height="12"
+                      rx="2"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                    />
+                    <circle
+                      cx="7.5"
+                      cy="10.5"
+                      r="1.5"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                    />
+                    <path
+                      d="M15 15l-3-3-4.5 4.5"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                    />
+                  </svg>
+                </div>
+                <div>
+                  <p className="font-bold text-dark-purple">Add more files</p>
+                  <button
+                    onClick={handleBrowseFiles}
+                    className="text-sm text-light-purple hover:text-dark-purple underline"
+                  >
+                    Browse files
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
 
-          {/* Convert To Section */}
-          <div className="text-center space-y-4">
-            <div className="flex items-center justify-center space-x-2">
-              <span className="text-dark-purple font-normal">Convert to.</span>
-              <span className="text-pink">✨ conver...</span>
-            </div>
-            <select
-              value={selectedFormat}
-              onChange={(e) => setSelectedFormat(e.target.value)}
-              className="btn-chunky bg-yellow text-dark-purple px-4 py-2 border-2 border-dark-purple rounded-xl font-bold"
-            >
-              <option value="JPG">JPG</option>
-              <option value="PNG">PNG</option>
-              <option value="WEBP">WEBP</option>
-              <option value="PDF">PDF</option>
-              <option value="SVG">SVG</option>
-            </select>
-          </div>
+          {/* Show conversion options only when files are present */}
+          {selectedFiles.length > 0 && (
+            <>
+              {/* Convert To Section */}
+              <div className="text-center space-y-4">
+                <div className="flex items-center justify-center">
+                  <span className="text-dark-purple font-normal text-lg">
+                    Convert to
+                  </span>
+                </div>
+                <select
+                  value={selectedFormat}
+                  onChange={(e) => setSelectedFormat(e.target.value)}
+                  className="btn-chunky bg-yellow text-dark-purple px-6 py-3 border-2 border-dark-purple rounded-xl font-bold text-lg appearance-none outline-none focus:outline-none focus:ring-0 focus:border-dark-purple"
+                  style={{ outline: "none", boxShadow: "none" }}
+                >
+                  <option value="JPG">JPG</option>
+                  <option value="PNG">PNG</option>
+                  <option value="WEBP">WEBP</option>
+                  <option value="PDF">PDF</option>
+                  <option value="SVG">SVG</option>
+                  <option value="BMP">BMP</option>
+                  <option value="TIFF">TIFF</option>
+                  <option value="MP4">MP4</option>
+                  <option value="AVI">AVI</option>
+                  <option value="MOV">MOV</option>
+                  <option value="MP3">MP3</option>
+                  <option value="WAV">WAV</option>
+                  <option value="FLAC">FLAC</option>
+                </select>
+              </div>
+            </>
+          )}
 
           {/* File List */}
           {selectedFiles.length > 0 && (
