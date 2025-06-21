@@ -8,7 +8,8 @@
     "build": "tsc && vite build",
     "preview": "vite preview",
     "tauri": "tauri",
-    "tauri:dev": "./scripts/tauri-dev.sh"
+    "tauri:dev": "./scripts/tauri-dev.sh",
+    "tauri:dev:clean": "./scripts/tauri-dev-clean.sh"
   },
   "dependencies": {
     "react": "^18.3.1",
