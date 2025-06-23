@@ -5,11 +5,17 @@ import { open } from "@tauri-apps/plugin-dialog";
 import DropZone from "./components/DropZone";
 import ConversionOptions from "./components/ConversionOptions";
 import AdvancedSettings from "./components/AdvancedSettings";
-import { FileInfo } from "./types";
+import FileConversionRow from "./components/FileConversionRow";
+import BatchConversionSettings from "./components/BatchConversionSettings";
+import {
+  FileInfo,
+  type BatchConversionSettings as BatchSettings,
+} from "./types";
+import { ChevronDown } from "lucide-react";
 
 function App() {
   const [selectedFiles, setSelectedFiles] = useState<FileInfo[]>([]);
-  const [selectedFormat, setSelectedFormat] = useState<string>("JPG");
+  const [batchSettings, setBatchSettings] = useState<BatchSettings>({});
   const [advancedOptions, setAdvancedOptions] = useState<string>("");
   const [outputDirectory, setOutputDirectory] = useState<string>("");
   const [isConverting, setIsConverting] = useState(false);
@@ -20,6 +26,8 @@ function App() {
     outputPath?: string;
   } | null>(null);
   const [currentPlatform, setCurrentPlatform] = useState<string>("windows");
+  const [isIndividualSettingsExpanded, setIsIndividualSettingsExpanded] =
+    useState(false);
 
   useEffect(() => {
     // Detect platform using user agent as a fallback
@@ -32,6 +40,50 @@ function App() {
       setCurrentPlatform("windows");
     }
   }, []);
+
+  // Update batch settings when files change
+  useEffect(() => {
+    const newBatchSettings: BatchSettings = {};
+
+    // Group files by extension and check for mixed formats
+    const filesByExtension = selectedFiles.reduce((acc, file) => {
+      const ext = file.extension.toLowerCase();
+      if (!acc[ext]) {
+        acc[ext] = [];
+      }
+      acc[ext].push(file);
+      return acc;
+    }, {} as Record<string, FileInfo[]>);
+
+    Object.entries(filesByExtension).forEach(([extension, extensionFiles]) => {
+      const formats = extensionFiles
+        .map((f) => f.selectedFormat)
+        .filter((f) => f !== undefined);
+
+      if (formats.length === 0) {
+        // No formats selected yet
+        return;
+      }
+
+      const uniqueFormats = Array.from(new Set(formats));
+
+      if (uniqueFormats.length === 1) {
+        // All files have the same format
+        newBatchSettings[extension] = {
+          format: uniqueFormats[0]!,
+          isMixed: false,
+        };
+      } else {
+        // Mixed formats
+        newBatchSettings[extension] = {
+          format: uniqueFormats[0]!, // Use first format as default
+          isMixed: true,
+        };
+      }
+    });
+
+    setBatchSettings(newBatchSettings);
+  }, [selectedFiles]);
 
   const handleFileSelect = (file: FileInfo) => {
     setSelectedFiles((prev) => [...prev, file]);
@@ -47,8 +99,40 @@ function App() {
     setSelectedFiles((prev) => prev.filter((_, i) => i !== index));
   };
 
+  const handleFileFormatChange = (index: number, format: string) => {
+    setSelectedFiles((prev) =>
+      prev.map((file, i) =>
+        i === index ? { ...file, selectedFormat: format } : file
+      )
+    );
+    // Batch settings will be updated automatically via useEffect
+  };
+
+  const handleBatchSettingChange = (inputExtension: string, format: string) => {
+    // Update all files of this extension
+    setSelectedFiles((prev) =>
+      prev.map((file) =>
+        file.extension.toLowerCase() === inputExtension.toLowerCase()
+          ? { ...file, selectedFormat: format }
+          : file
+      )
+    );
+    // Update batch settings
+    setBatchSettings((prev) => ({
+      ...prev,
+      [inputExtension.toLowerCase()]: {
+        format: format,
+        isMixed: false,
+      },
+    }));
+  };
+
   const handleConvert = async () => {
-    if (selectedFiles.length === 0 || !selectedFormat) return;
+    // Check if all files have selected formats
+    const filesWithFormats = selectedFiles.filter(
+      (file) => file.selectedFormat
+    );
+    if (filesWithFormats.length === 0) return;
 
     setIsConverting(true);
     setConversionProgress(0);
@@ -56,17 +140,17 @@ function App() {
 
     try {
       let lastOutputPath = "";
-      // Convert each file
-      for (let i = 0; i < selectedFiles.length; i++) {
-        const file = selectedFiles[i];
+      // Convert each file with its selected format
+      for (let i = 0; i < filesWithFormats.length; i++) {
+        const file = filesWithFormats[i];
         const result = await invoke<string>("convert_file", {
           inputPath: file.path,
-          outputFormat: selectedFormat,
+          outputFormat: file.selectedFormat!,
           outputDirectory: outputDirectory || undefined,
           advancedOptions: advancedOptions || undefined,
         });
         lastOutputPath = result;
-        setConversionProgress(((i + 1) / selectedFiles.length) * 100);
+        setConversionProgress(((i + 1) / filesWithFormats.length) * 100);
       }
 
       setConversionResult({
@@ -526,88 +610,61 @@ function App() {
             </div>
           )}
 
-          {/* Show conversion options only when files are present */}
+          {/* Batch Conversion Settings */}
           {selectedFiles.length > 0 && (
-            <>
-              {/* Dynamic Conversion Options */}
-              <ConversionOptions
-                inputFile={selectedFiles[0]}
-                selectedFormat={selectedFormat}
-                onFormatSelect={setSelectedFormat}
-              />
-            </>
+            <BatchConversionSettings
+              files={selectedFiles}
+              batchSettings={batchSettings}
+              onBatchSettingChange={handleBatchSettingChange}
+            />
           )}
 
-          {/* File List */}
+          {/* Individual File Conversion Options */}
           {selectedFiles.length > 0 && (
-            <div className="space-y-2">
-              <h3 className="text-lg font-bold text-dark-purple">Images</h3>
-              <div className="space-y-2">
-                {selectedFiles.map((file, index) => (
-                  <div
-                    key={index}
-                    className="flex items-center justify-between p-4 bg-white rounded-xl border-2 border-dark-purple"
-                  >
-                    <div className="flex items-center space-x-4">
-                      <div className="w-12 h-12 bg-light-grey rounded-lg flex items-center justify-center">
-                        <svg
-                          width="24"
-                          height="24"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          className="text-light-purple"
-                        >
-                          <rect
-                            x="3"
-                            y="6"
-                            width="15"
-                            height="12"
-                            rx="2"
-                            stroke="currentColor"
-                            strokeWidth="2"
-                          />
-                          <circle
-                            cx="7.5"
-                            cy="10.5"
-                            r="1.5"
-                            stroke="currentColor"
-                            strokeWidth="2"
-                          />
-                          <path
-                            d="M15 15l-3-3-4.5 4.5"
-                            stroke="currentColor"
-                            strokeWidth="2"
-                          />
-                        </svg>
-                      </div>
-                      <div className="space-y-1">
-                        <p className="font-bold text-dark-purple">
-                          {file.name}
-                        </p>
-                        <p className="text-sm text-light-purple">
-                          {formatFileSize(file.size)} •{" "}
-                          {file.extension.toUpperCase()}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <button
-                        onClick={() => removeFile(index)}
-                        className="p-1 text-dark-purple hover:bg-light-grey rounded"
-                      >
-                        <svg
-                          width="16"
-                          height="16"
-                          viewBox="0 0 16 16"
-                          fill="currentColor"
-                        >
-                          <path d="M2.5 1a1 1 0 0 0-1 1v1a1 1 0 0 0 1 1H3v9a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2V4h.5a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1H10a1 1 0 0 0-1-1H7a1 1 0 0 0-1 1H2.5zm3 4a.5.5 0 0 1 .5.5v7a.5.5 0 0 1-1 0v-7a.5.5 0 0 1 .5-.5zM8 5a.5.5 0 0 1 .5.5v7a.5.5 0 0 1-1 0v-7A.5.5 0 0 1 8 5zm3 .5v7a.5.5 0 0 1-1 0v-7a.5.5 0 0 1 1 0z" />
-                        </svg>
-                      </button>
-                    </div>
-                  </div>
-                ))}
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-xl font-bold text-primary">
+                    Individual File Settings
+                  </h2>
+                  <p className="text-sm text-secondary">
+                    Customize conversion settings for each file individually
+                  </p>
+                </div>
+                <button
+                  onClick={() =>
+                    setIsIndividualSettingsExpanded(
+                      !isIndividualSettingsExpanded
+                    )
+                  }
+                  className="btn-chunky bg-light-grey text-dark-purple px-4 py-2 flex items-center space-x-2 hover:bg-tan"
+                >
+                  <span>
+                    {isIndividualSettingsExpanded ? "Hide" : "Show"} Files (
+                    {selectedFiles.length})
+                  </span>
+                  <ChevronDown
+                    className={`w-4 h-4 transition-transform duration-200 ${
+                      isIndividualSettingsExpanded ? "rotate-180" : ""
+                    }`}
+                  />
+                </button>
               </div>
+
+              {isIndividualSettingsExpanded && (
+                <div className="space-y-3">
+                  {selectedFiles.map((file, index) => (
+                    <FileConversionRow
+                      key={index}
+                      file={file}
+                      index={index}
+                      onFormatChange={handleFileFormatChange}
+                      onRemove={removeFile}
+                      formatFileSize={formatFileSize}
+                    />
+                  ))}
+                </div>
+              )}
             </div>
           )}
 

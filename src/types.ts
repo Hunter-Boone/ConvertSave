@@ -3,6 +3,7 @@ export interface FileInfo {
   path: string;
   size: number;
   extension: string;
+  selectedFormat?: string;
 }
 
 export interface ConversionTool {
@@ -17,4 +18,11 @@ export interface ConversionOption {
   tool: string;
   display_name: string;
   color: string;
+}
+
+export interface BatchConversionSettings {
+  [inputExtension: string]: {
+    format: string;
+    isMixed: boolean; // true when files of same type have different target formats
+  };
 }
