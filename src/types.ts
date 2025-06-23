@@ -15,6 +15,6 @@ export interface ConversionTool {
 export interface ConversionOption {
   format: string;
   tool: string;
-  displayName: string;
+  display_name: string;
   color: string;
 }

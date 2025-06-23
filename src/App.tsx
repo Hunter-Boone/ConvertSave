@@ -241,20 +241,6 @@ function App() {
     }
   };
 
-  const testDirectories = async () => {
-    try {
-      const result = await invoke("test_directories");
-      console.log("Directory test result:", result);
-      alert(
-        "Directory test result (check console): " +
-          JSON.stringify(result, null, 2)
-      );
-    } catch (error) {
-      console.error("Directory test failed:", error);
-      alert("Directory test failed: " + error);
-    }
-  };
-
   const openOutputFolder = async () => {
     if (conversionResult?.outputPath) {
       try {
@@ -543,34 +529,12 @@ function App() {
           {/* Show conversion options only when files are present */}
           {selectedFiles.length > 0 && (
             <>
-              {/* Convert To Section */}
-              <div className="text-center space-y-4">
-                <div className="flex items-center justify-center">
-                  <span className="text-dark-purple font-normal text-lg">
-                    Convert to
-                  </span>
-                </div>
-                <select
-                  value={selectedFormat}
-                  onChange={(e) => setSelectedFormat(e.target.value)}
-                  className="btn-chunky bg-yellow text-dark-purple px-6 py-3 border-2 border-dark-purple rounded-xl font-bold text-lg appearance-none outline-none focus:outline-none focus:ring-0 focus:border-dark-purple"
-                  style={{ outline: "none", boxShadow: "none" }}
-                >
-                  <option value="JPG">JPG</option>
-                  <option value="PNG">PNG</option>
-                  <option value="WEBP">WEBP</option>
-                  <option value="PDF">PDF</option>
-                  <option value="SVG">SVG</option>
-                  <option value="BMP">BMP</option>
-                  <option value="TIFF">TIFF</option>
-                  <option value="MP4">MP4</option>
-                  <option value="AVI">AVI</option>
-                  <option value="MOV">MOV</option>
-                  <option value="MP3">MP3</option>
-                  <option value="WAV">WAV</option>
-                  <option value="FLAC">FLAC</option>
-                </select>
-              </div>
+              {/* Dynamic Conversion Options */}
+              <ConversionOptions
+                inputFile={selectedFiles[0]}
+                selectedFormat={selectedFormat}
+                onFormatSelect={setSelectedFormat}
+              />
             </>
           )}
 
@@ -627,11 +591,6 @@ function App() {
                       </div>
                     </div>
                     <div className="flex items-center space-x-2">
-                      <select className="btn-chunky bg-yellow text-dark-purple px-3 py-1 text-sm border-2 border-dark-purple rounded-lg">
-                        <option value="JPG">JPG</option>
-                        <option value="PNG">PNG</option>
-                        <option value="WEBP">WEBP</option>
-                      </select>
                       <button
                         onClick={() => removeFile(index)}
                         className="p-1 text-dark-purple hover:bg-light-grey rounded"
@@ -663,12 +622,6 @@ function App() {
                 {isConverting
                   ? "Converting..."
                   : `Convert ${selectedFiles.length} file(s)`}
-              </button>
-              <button
-                onClick={testDirectories}
-                className="btn-chunky bg-light-grey text-dark-purple px-4 py-2 text-sm"
-              >
-                Debug Directories
               </button>
             </div>
           )}
