@@ -31,6 +31,7 @@ export default function ToolDownloader({
   const [downloadProgress, setDownloadProgress] =
     useState<DownloadProgress | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   useEffect(() => {
     checkToolsStatus();
@@ -38,18 +39,34 @@ export default function ToolDownloader({
     const unlisten = listen<DownloadProgress>("download-progress", (event) => {
       setDownloadProgress(event.payload);
       if (event.payload.status === "complete") {
-        setDownloadingTool(null);
-        // Re-check status after download completes
+        // Store the tool name before clearing state
+        setDownloadingTool((current) => {
+          if (current) {
+            setSuccessMessage(`${current} downloaded successfully!`);
+          }
+          return null;
+        });
+
+        // Immediately check status to update UI
+        // The backend already verified the file exists before emitting "complete"
+        checkToolsStatus();
+
+        // Clear progress message after a short delay
         setTimeout(() => {
-          checkToolsStatus();
-        }, 500);
+          setDownloadProgress(null);
+        }, 1000);
+
+        // Clear success message after showing it
+        setTimeout(() => {
+          setSuccessMessage(null);
+        }, 2500);
       }
     });
 
     return () => {
       unlisten.then((fn) => fn());
     };
-  }, []);
+  }, []); // Empty dependency array so listener is only registered once
 
   useEffect(() => {
     if (
@@ -57,14 +74,18 @@ export default function ToolDownloader({
       toolStatus.ffmpeg.available &&
       toolStatus.pandoc.available
     ) {
-      onAllToolsReady();
+      // Short delay before transitioning to allow UI to update
+      setTimeout(() => {
+        onAllToolsReady();
+      }, 500);
     }
   }, [toolStatus, onAllToolsReady]);
 
   const checkToolsStatus = async () => {
     try {
       const status = await invoke<ToolStatus>("check_tools_status");
-      setToolStatus(status);
+      // Force a new object to ensure state update triggers
+      setToolStatus({ ...status });
     } catch (err) {
       setError(`Failed to check tool status: ${err}`);
     }
@@ -74,6 +95,7 @@ export default function ToolDownloader({
     setDownloadingTool(toolName);
     setDownloadProgress(null);
     setError(null);
+    setSuccessMessage(null);
 
     try {
       if (toolName === "ffmpeg") {
@@ -81,9 +103,11 @@ export default function ToolDownloader({
       } else if (toolName === "pandoc") {
         await invoke("download_pandoc");
       }
+      // Note: Success is handled by the download-progress event listener
     } catch (err) {
       setError(`Failed to download ${toolName}: ${err}`);
       setDownloadingTool(null);
+      setDownloadProgress(null);
     }
   };
 
@@ -216,12 +240,12 @@ export default function ToolDownloader({
         </div>
 
         {/* Download Progress */}
-        {downloadProgress && (
+        {downloadProgress && downloadProgress.status !== "complete" && (
           <div className="bg-aquamarine border-2 border-dark-purple rounded-xl p-4">
             <div className="flex items-center space-x-3">
               <Loader className="w-5 h-5 animate-spin text-dark-purple" />
               <div>
-                <p className="font-bold text-dark-purple">
+                <p className="font-bold text-dark-purple capitalize">
                   {downloadProgress.status}
                 </p>
                 <p className="text-sm text-dark-purple">
@@ -232,10 +256,23 @@ export default function ToolDownloader({
           </div>
         )}
 
+        {/* Success Message */}
+        {successMessage && (
+          <div className="bg-aquamarine border-2 border-dark-purple rounded-xl p-4">
+            <div className="flex items-center space-x-3">
+              <Check className="w-5 h-5 text-dark-purple" />
+              <p className="font-bold text-dark-purple">{successMessage}</p>
+            </div>
+          </div>
+        )}
+
         {/* Error Message */}
         {error && (
           <div className="bg-pink border-2 border-dark-purple rounded-xl p-4">
-            <p className="font-bold text-dark-purple">Error: {error}</p>
+            <div className="flex items-center space-x-3">
+              <X className="w-5 h-5 text-dark-purple" />
+              <p className="font-bold text-dark-purple">{error}</p>
+            </div>
           </div>
         )}
 
@@ -273,14 +310,30 @@ export default function ToolDownloader({
         </div>
 
         {/* Continue Button */}
-        {allToolsReady && (
-          <div className="text-center">
+        {allToolsReady ? (
+          <div className="text-center space-y-3">
             <button
               onClick={onAllToolsReady}
-              className="btn-chunky bg-aquamarine text-dark-purple px-8 py-4 text-lg"
+              className="btn-chunky bg-aquamarine text-dark-purple px-8 py-4 text-lg w-full"
             >
               Continue to ConvertSave
             </button>
+            <p className="text-sm text-light-purple">
+              All tools are ready! You can now convert files.
+            </p>
+          </div>
+        ) : (
+          <div className="text-center space-y-3">
+            <button
+              onClick={onAllToolsReady}
+              className="btn-chunky bg-light-grey text-dark-purple px-8 py-3 text-base w-full hover:bg-tan"
+            >
+              Skip for Now
+            </button>
+            <p className="text-xs text-light-purple">
+              You can download tools later, but conversions won't work until
+              they're installed.
+            </p>
           </div>
         )}
       </div>

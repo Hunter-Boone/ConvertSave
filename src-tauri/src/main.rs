@@ -505,8 +505,16 @@ fn get_tool_path(tool_name: &str) -> Result<PathBuf, String> {
     let mut possible_paths = vec![];
     
     // 1. App data directory (downloaded binaries) - CHECK THIS FIRST
+    // NOTE: This must match the path used in download_ffmpeg/download_pandoc
+    // We can't use app.path().app_data_dir() here since we don't have AppHandle,
+    // so we manually construct the same path that Tauri uses
     if let Some(data_dir) = dirs::data_dir() {
-        let app_data_path = data_dir.join("com.convertsave.app").join(tool_name).join(exe_name);
+        // Tauri's app_data_dir() uses: {data_dir}/{identifier}
+        // Our identifier from tauri.conf.json is "com.convertsave.app"
+        let app_data_path = data_dir
+            .join("com.convertsave.app")
+            .join(tool_name)
+            .join(exe_name);
         possible_paths.push(app_data_path);
     }
     
@@ -538,7 +546,6 @@ fn get_tool_path(tool_name: &str) -> Result<PathBuf, String> {
     
     for path in &possible_paths {
         if path.exists() {
-            println!("Found tool at: {}", path.display());
             return Ok(path.clone());
         }
     }
@@ -602,8 +609,25 @@ async fn execute_conversion(
         Ok(())
     } else {
         let stderr = String::from_utf8_lossy(&output.stderr);
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        Err(format!("Conversion failed:\nSTDOUT: {}\nSTDERR: {}", stdout, stderr))
+        let _stdout = String::from_utf8_lossy(&output.stdout);
+        
+        // Provide user-friendly error messages for common issues
+        let error_msg = if stderr.contains("does not contain any stream") {
+            if tool_name == "ffmpeg" {
+                "This video file has no audio stream. Cannot convert to audio format. Try converting to a video format instead.".to_string()
+            } else {
+                "The file does not contain the required streams for this conversion.".to_string()
+            }
+        } else if stderr.contains("Invalid argument") && stderr.contains("Error opening output file") {
+            "Cannot write to the output location. This may be due to:\n- Network drive access issues\n- Insufficient permissions\n- Invalid file path\n\nTry saving to a local drive instead.".to_string()
+        } else if stderr.contains("No such file or directory") || stderr.contains("does not exist") {
+            "Input file not found. The file may have been moved or deleted.".to_string()
+        } else {
+            // For other errors, show the technical details
+            format!("Conversion failed. Error details:\n{}", stderr)
+        };
+        
+        Err(error_msg)
     }
 }
 
@@ -644,6 +668,11 @@ async fn download_ffmpeg(app: AppHandle) -> Result<String, String> {
         extract_zip(&archive_path, &extract_dir, "ffmpeg")?;
     } else {
         extract_tar_gz(&archive_path, &extract_dir, "ffmpeg")?;
+    }
+    
+    // Verify the file was actually extracted
+    if !ffmpeg_path.exists() {
+        return Err(format!("FFmpeg binary not found after extraction at: {}", ffmpeg_path.display()));
     }
     
     std::fs::remove_file(&archive_path).map_err(|e| e.to_string())?;
@@ -691,6 +720,11 @@ async fn download_pandoc(app: AppHandle) -> Result<String, String> {
         extract_zip(&archive_path, &extract_dir, "pandoc")?;
     } else {
         extract_tar_gz(&archive_path, &extract_dir, "pandoc")?;
+    }
+    
+    // Verify the file was actually extracted
+    if !pandoc_path.exists() {
+        return Err(format!("Pandoc binary not found after extraction at: {}", pandoc_path.display()));
     }
     
     std::fs::remove_file(&archive_path).map_err(|e| e.to_string())?;
@@ -790,21 +824,25 @@ fn get_ffmpeg_download_info() -> Result<(String, String, bool), String> {
 }
 
 fn get_pandoc_download_info() -> Result<(String, String, bool), String> {
+    // Note: Pandoc releases use version-specific filenames
+    // We use specific known versions that exist on GitHub
+    // In the future, this could use the GitHub API to get the latest release dynamically
     if cfg!(target_os = "windows") {
         Ok((
-            "https://github.com/jgm/pandoc/releases/latest/download/pandoc-3.6-windows-x86_64.zip".to_string(),
+            "https://github.com/jgm/pandoc/releases/download/3.5/pandoc-3.5-windows-x86_64.zip".to_string(),
             "pandoc-windows.zip".to_string(),
             true,
         ))
     } else if cfg!(target_os = "macos") {
+        // For macOS, we'll use the Intel version as it works on both via Rosetta
         Ok((
-            "https://github.com/jgm/pandoc/releases/latest/download/pandoc-3.6-arm64-macOS.zip".to_string(),
+            "https://github.com/jgm/pandoc/releases/download/3.5/pandoc-3.5-x86_64-macOS.zip".to_string(),
             "pandoc-macos.zip".to_string(),
             true,
         ))
     } else {
         Ok((
-            "https://github.com/jgm/pandoc/releases/latest/download/pandoc-3.6-linux-amd64.tar.gz".to_string(),
+            "https://github.com/jgm/pandoc/releases/download/3.5/pandoc-3.5-linux-amd64.tar.gz".to_string(),
             "pandoc-linux.tar.gz".to_string(),
             false,
         ))
