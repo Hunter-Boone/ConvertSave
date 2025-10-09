@@ -6,6 +6,7 @@ use std::path::PathBuf;
 use std::process::Command;
 use dirs;
 use serde_json;
+use tauri::{AppHandle, Emitter, Manager};
 
 #[derive(Debug, Serialize, Deserialize)]
 struct ConversionOption {
@@ -13,6 +14,12 @@ struct ConversionOption {
     tool: String,
     display_name: String,
     color: String,
+}
+
+#[derive(Serialize, Clone)]
+struct DownloadProgress {
+    status: String,
+    message: String,
 }
 
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
@@ -495,27 +502,39 @@ fn get_tool_path(tool_name: &str) -> Result<PathBuf, String> {
     };
     
     // Try multiple possible locations
-    let possible_paths = vec![
-        // 1. Project root tools directory (development)
-        std::env::current_dir()
-            .map(|d| d.join("tools").join(platform_name).join(exe_name))
-            .unwrap_or_else(|_| PathBuf::new()),
-        
-        // 2. Relative to executable (production)
-        std::env::current_exe()
-            .map(|exe| exe.parent().unwrap_or(&exe).join("tools").join(platform_name).join(exe_name))
-            .unwrap_or_else(|_| PathBuf::new()),
-        
-        // 3. Parent directory of executable + tools (alternative production layout)
-        std::env::current_exe()
-            .map(|exe| exe.parent().and_then(|p| p.parent()).unwrap_or(&exe).join("tools").join(platform_name).join(exe_name))
-            .unwrap_or_else(|_| PathBuf::new()),
-            
-        // 4. Check if we're in src-tauri directory during development
-        std::env::current_dir()
-            .map(|d| d.parent().unwrap_or(&d).join("tools").join(platform_name).join(exe_name))
-            .unwrap_or_else(|_| PathBuf::new()),
-    ];
+    let mut possible_paths = vec![];
+    
+    // 1. App data directory (downloaded binaries) - CHECK THIS FIRST
+    if let Some(data_dir) = dirs::data_dir() {
+        let app_data_path = data_dir.join("com.convertsave.app").join(tool_name).join(exe_name);
+        possible_paths.push(app_data_path);
+    }
+    
+    // 2. Project root tools directory (development)
+    if let Ok(current) = std::env::current_dir() {
+        possible_paths.push(current.join("tools").join(platform_name).join(exe_name));
+    }
+    
+    // 3. Relative to executable (production)
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(parent) = exe.parent() {
+            possible_paths.push(parent.join("tools").join(platform_name).join(exe_name));
+        }
+    }
+    
+    // 4. Parent directory of executable + tools (alternative production layout)
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(parent) = exe.parent().and_then(|p| p.parent()) {
+            possible_paths.push(parent.join("tools").join(platform_name).join(exe_name));
+        }
+    }
+    
+    // 5. Check if we're in src-tauri directory during development
+    if let Ok(current) = std::env::current_dir() {
+        if let Some(parent) = current.parent() {
+            possible_paths.push(parent.join("tools").join(platform_name).join(exe_name));
+        }
+    }
     
     for path in &possible_paths {
         if path.exists() {
@@ -588,18 +607,324 @@ async fn execute_conversion(
     }
 }
 
+// Binary download functions
+
+#[tauri::command]
+async fn download_ffmpeg(app: AppHandle) -> Result<String, String> {
+    let data_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
+    std::fs::create_dir_all(&data_dir).map_err(|e| e.to_string())?;
+    
+    let (download_url, filename, is_zip) = get_ffmpeg_download_info()?;
+    let ffmpeg_path = data_dir.join("ffmpeg").join(if cfg!(windows) { "ffmpeg.exe" } else { "ffmpeg" });
+    
+    if ffmpeg_path.exists() {
+        return Ok("FFmpeg already downloaded".to_string());
+    }
+    
+    app.emit("download-progress", DownloadProgress {
+        status: "downloading".to_string(),
+        message: "Downloading FFmpeg...".to_string(),
+    }).map_err(|e| e.to_string())?;
+    
+    let response = reqwest::get(&download_url).await.map_err(|e| e.to_string())?;
+    let bytes = response.bytes().await.map_err(|e| e.to_string())?;
+    
+    let archive_path = data_dir.join(&filename);
+    std::fs::write(&archive_path, bytes).map_err(|e| e.to_string())?;
+    
+    app.emit("download-progress", DownloadProgress {
+        status: "extracting".to_string(),
+        message: "Extracting FFmpeg...".to_string(),
+    }).map_err(|e| e.to_string())?;
+    
+    let extract_dir = data_dir.join("ffmpeg");
+    std::fs::create_dir_all(&extract_dir).map_err(|e| e.to_string())?;
+    
+    if is_zip {
+        extract_zip(&archive_path, &extract_dir, "ffmpeg")?;
+    } else {
+        extract_tar_gz(&archive_path, &extract_dir, "ffmpeg")?;
+    }
+    
+    std::fs::remove_file(&archive_path).map_err(|e| e.to_string())?;
+    
+    app.emit("download-progress", DownloadProgress {
+        status: "complete".to_string(),
+        message: "FFmpeg downloaded successfully!".to_string(),
+    }).map_err(|e| e.to_string())?;
+    
+    Ok("FFmpeg downloaded successfully".to_string())
+}
+
+#[tauri::command]
+async fn download_pandoc(app: AppHandle) -> Result<String, String> {
+    let data_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
+    std::fs::create_dir_all(&data_dir).map_err(|e| e.to_string())?;
+    
+    let (download_url, filename, is_zip) = get_pandoc_download_info()?;
+    let pandoc_path = data_dir.join("pandoc").join(if cfg!(windows) { "pandoc.exe" } else { "pandoc" });
+    
+    if pandoc_path.exists() {
+        return Ok("Pandoc already downloaded".to_string());
+    }
+    
+    app.emit("download-progress", DownloadProgress {
+        status: "downloading".to_string(),
+        message: "Downloading Pandoc...".to_string(),
+    }).map_err(|e| e.to_string())?;
+    
+    let response = reqwest::get(&download_url).await.map_err(|e| e.to_string())?;
+    let bytes = response.bytes().await.map_err(|e| e.to_string())?;
+    
+    let archive_path = data_dir.join(&filename);
+    std::fs::write(&archive_path, bytes).map_err(|e| e.to_string())?;
+    
+    app.emit("download-progress", DownloadProgress {
+        status: "extracting".to_string(),
+        message: "Extracting Pandoc...".to_string(),
+    }).map_err(|e| e.to_string())?;
+    
+    let extract_dir = data_dir.join("pandoc");
+    std::fs::create_dir_all(&extract_dir).map_err(|e| e.to_string())?;
+    
+    if is_zip {
+        extract_zip(&archive_path, &extract_dir, "pandoc")?;
+    } else {
+        extract_tar_gz(&archive_path, &extract_dir, "pandoc")?;
+    }
+    
+    std::fs::remove_file(&archive_path).map_err(|e| e.to_string())?;
+    
+    app.emit("download-progress", DownloadProgress {
+        status: "complete".to_string(),
+        message: "Pandoc downloaded successfully!".to_string(),
+    }).map_err(|e| e.to_string())?;
+    
+    Ok("Pandoc downloaded successfully".to_string())
+}
+
+#[tauri::command]
+async fn test_tool(tool_name: String) -> Result<String, String> {
+    let tool_path = match get_tool_path(&tool_name) {
+        Ok(path) => path,
+        Err(_) => {
+            return Err(format!("{} not found. Please download it first.", tool_name));
+        }
+    };
+    
+    let output = Command::new(&tool_path)
+        .arg("-version")
+        .output()
+        .map_err(|e| e.to_string())?;
+    
+    if output.status.success() {
+        let version_info = String::from_utf8_lossy(&output.stdout);
+        let first_line = version_info.lines().next().unwrap_or("Unknown version");
+        Ok(format!("{} is working! {}\n\nLocation: {}", tool_name, first_line, tool_path.display()))
+    } else {
+        Err(format!("{} test failed", tool_name))
+    }
+}
+
+#[tauri::command]
+async fn check_tools_status() -> Result<serde_json::Value, String> {
+    let mut status = serde_json::Map::new();
+    
+    // Check ffmpeg
+    let ffmpeg_status = match get_tool_path("ffmpeg") {
+        Ok(path) => {
+            serde_json::json!({
+                "available": true,
+                "path": path.to_string_lossy().to_string()
+            })
+        }
+        Err(_) => {
+            serde_json::json!({
+                "available": false,
+                "path": null
+            })
+        }
+    };
+    status.insert("ffmpeg".to_string(), ffmpeg_status);
+    
+    // Check pandoc
+    let pandoc_status = match get_tool_path("pandoc") {
+        Ok(path) => {
+            serde_json::json!({
+                "available": true,
+                "path": path.to_string_lossy().to_string()
+            })
+        }
+        Err(_) => {
+            serde_json::json!({
+                "available": false,
+                "path": null
+            })
+        }
+    };
+    status.insert("pandoc".to_string(), pandoc_status);
+    
+    Ok(serde_json::Value::Object(status))
+}
+
+fn get_ffmpeg_download_info() -> Result<(String, String, bool), String> {
+    if cfg!(target_os = "windows") {
+        Ok((
+            "https://github.com/BtbN/FFmpeg-Builds/releases/latest/download/ffmpeg-master-latest-win64-gpl.zip".to_string(),
+            "ffmpeg-windows.zip".to_string(),
+            true,
+        ))
+    } else if cfg!(target_os = "macos") {
+        Ok((
+            "https://evermeet.cx/ffmpeg/getrelease/zip".to_string(),
+            "ffmpeg-macos.zip".to_string(),
+            true,
+        ))
+    } else {
+        Ok((
+            "https://github.com/BtbN/FFmpeg-Builds/releases/latest/download/ffmpeg-master-latest-linux64-gpl.tar.xz".to_string(),
+            "ffmpeg-linux.tar.xz".to_string(),
+            false,
+        ))
+    }
+}
+
+fn get_pandoc_download_info() -> Result<(String, String, bool), String> {
+    if cfg!(target_os = "windows") {
+        Ok((
+            "https://github.com/jgm/pandoc/releases/latest/download/pandoc-3.6-windows-x86_64.zip".to_string(),
+            "pandoc-windows.zip".to_string(),
+            true,
+        ))
+    } else if cfg!(target_os = "macos") {
+        Ok((
+            "https://github.com/jgm/pandoc/releases/latest/download/pandoc-3.6-arm64-macOS.zip".to_string(),
+            "pandoc-macos.zip".to_string(),
+            true,
+        ))
+    } else {
+        Ok((
+            "https://github.com/jgm/pandoc/releases/latest/download/pandoc-3.6-linux-amd64.tar.gz".to_string(),
+            "pandoc-linux.tar.gz".to_string(),
+            false,
+        ))
+    }
+}
+
+fn extract_zip(archive_path: &PathBuf, extract_dir: &PathBuf, binary_name: &str) -> Result<(), String> {
+    let file = std::fs::File::open(archive_path).map_err(|e| e.to_string())?;
+    let mut archive = zip::ZipArchive::new(file).map_err(|e| e.to_string())?;
+    
+    let exe_name = if cfg!(windows) {
+        format!("{}.exe", binary_name)
+    } else {
+        binary_name.to_string()
+    };
+    
+    for i in 0..archive.len() {
+        let mut file = archive.by_index(i).map_err(|e| e.to_string())?;
+        let path = file.enclosed_name().unwrap_or_else(|| std::path::Path::new(""));
+        
+        if let Some(filename) = path.file_name() {
+            if filename == exe_name.as_str() || filename.to_string_lossy().ends_with(&exe_name) {
+                let outpath = extract_dir.join(&exe_name);
+                let mut outfile = std::fs::File::create(&outpath).map_err(|e| e.to_string())?;
+                std::io::copy(&mut file, &mut outfile).map_err(|e| e.to_string())?;
+                
+                #[cfg(unix)]
+                {
+                    use std::os::unix::fs::PermissionsExt;
+                    std::fs::set_permissions(&outpath, std::fs::Permissions::from_mode(0o755))
+                        .map_err(|e| e.to_string())?;
+                }
+                return Ok(());
+            }
+        }
+    }
+    
+    Err(format!("{} binary not found in archive", binary_name))
+}
+
+fn extract_tar_gz(archive_path: &PathBuf, extract_dir: &PathBuf, binary_name: &str) -> Result<(), String> {
+    let file = std::fs::File::open(archive_path).map_err(|e| e.to_string())?;
+    
+    let exe_name = if cfg!(windows) {
+        format!("{}.exe", binary_name)
+    } else {
+        binary_name.to_string()
+    };
+    
+    if archive_path.extension().and_then(|s| s.to_str()) == Some("xz") {
+        // Decompress XZ file to memory first, then create tar archive
+        let mut buf_reader = std::io::BufReader::new(file);
+        let mut decompressed_data = Vec::new();
+        lzma_rs::xz_decompress(&mut buf_reader, &mut decompressed_data).map_err(|e| e.to_string())?;
+        let mut archive = tar::Archive::new(std::io::Cursor::new(decompressed_data));
+        
+        for entry in archive.entries().map_err(|e| e.to_string())? {
+            let mut entry = entry.map_err(|e| e.to_string())?;
+            let path = entry.path().map_err(|e| e.to_string())?;
+            
+            if let Some(filename) = path.file_name() {
+                if filename == std::ffi::OsStr::new(&exe_name) || filename.to_string_lossy().ends_with(&exe_name) {
+                    let outpath = extract_dir.join(&exe_name);
+                    entry.unpack(&outpath).map_err(|e| e.to_string())?;
+                    
+                    #[cfg(unix)]
+                    {
+                        use std::os::unix::fs::PermissionsExt;
+                        std::fs::set_permissions(&outpath, std::fs::Permissions::from_mode(0o755))
+                            .map_err(|e| e.to_string())?;
+                    }
+                    return Ok(());
+                }
+            }
+        }
+    } else {
+        let dec = flate2::read::GzDecoder::new(file);
+        let mut archive = tar::Archive::new(dec);
+        
+        for entry in archive.entries().map_err(|e| e.to_string())? {
+            let mut entry = entry.map_err(|e| e.to_string())?;
+            let path = entry.path().map_err(|e| e.to_string())?;
+            
+            if let Some(filename) = path.file_name() {
+                if filename == std::ffi::OsStr::new(&exe_name) || filename.to_string_lossy().ends_with(&exe_name) {
+                    let outpath = extract_dir.join(&exe_name);
+                    entry.unpack(&outpath).map_err(|e| e.to_string())?;
+                    
+                    #[cfg(unix)]
+                    {
+                        use std::os::unix::fs::PermissionsExt;
+                        std::fs::set_permissions(&outpath, std::fs::Permissions::from_mode(0o755))
+                            .map_err(|e| e.to_string())?;
+                    }
+                    return Ok(());
+                }
+            }
+        }
+    }
+    
+    Err(format!("{} binary not found in archive", binary_name))
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_http::init())
         .invoke_handler(tauri::generate_handler![
             get_available_formats,
             convert_file,
             get_file_info,
             test_directories,
-            open_folder
+            open_folder,
+            download_ffmpeg,
+            download_pandoc,
+            test_tool,
+            check_tools_status
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -7,11 +7,23 @@ import ConversionOptions from "./components/ConversionOptions";
 import AdvancedSettings from "./components/AdvancedSettings";
 import FileConversionRow from "./components/FileConversionRow";
 import BatchConversionSettings from "./components/BatchConversionSettings";
+import ToolDownloader from "./components/ToolDownloader";
 import {
   FileInfo,
   type BatchConversionSettings as BatchSettings,
 } from "./types";
 import { ChevronDown } from "lucide-react";
+
+interface ToolStatus {
+  ffmpeg: {
+    available: boolean;
+    path: string | null;
+  };
+  pandoc: {
+    available: boolean;
+    path: string | null;
+  };
+}
 
 function App() {
   const [selectedFiles, setSelectedFiles] = useState<FileInfo[]>([]);
@@ -28,6 +40,7 @@ function App() {
   const [currentPlatform, setCurrentPlatform] = useState<string>("windows");
   const [isIndividualSettingsExpanded, setIsIndividualSettingsExpanded] =
     useState(false);
+  const [toolsReady, setToolsReady] = useState<boolean | null>(null);
 
   useEffect(() => {
     // Detect platform using user agent as a fallback
@@ -39,7 +52,25 @@ function App() {
     } else {
       setCurrentPlatform("windows");
     }
+
+    // Check if tools are ready
+    checkToolsStatus();
   }, []);
+
+  const checkToolsStatus = async () => {
+    try {
+      const status = await invoke<ToolStatus>("check_tools_status");
+      const allReady = status.ffmpeg.available && status.pandoc.available;
+      setToolsReady(allReady);
+    } catch (err) {
+      console.error("Failed to check tool status:", err);
+      setToolsReady(false);
+    }
+  };
+
+  const handleToolsReady = () => {
+    setToolsReady(true);
+  };
 
   // Update batch settings when files change
   useEffect(() => {
@@ -469,6 +500,23 @@ function App() {
       </button>
     </div>
   );
+
+  // Show tool downloader if tools aren't ready
+  if (toolsReady === false) {
+    return <ToolDownloader onAllToolsReady={handleToolsReady} />;
+  }
+
+  // Show loading state while checking
+  if (toolsReady === null) {
+    return (
+      <div className="h-screen bg-off-white flex items-center justify-center">
+        <div className="text-center space-y-4">
+          <div className="w-16 h-16 border-4 border-aquamarine border-t-transparent rounded-full animate-spin mx-auto"></div>
+          <p className="text-dark-purple font-bold">Loading ConvertSave...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="h-screen bg-off-white flex flex-col overflow-hidden">

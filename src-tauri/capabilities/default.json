@@ -17,7 +17,24 @@
     "fs:allow-read-file",
     "fs:allow-write-file",
     "fs:allow-stat",
+    "fs:allow-create",
+    "fs:allow-remove",
     "shell:default",
-    "shell:allow-open"
+    "shell:allow-open",
+    "http:default",
+    {
+      "identifier": "http:allow-fetch",
+      "allow": [
+        {
+          "url": "https://github.com/BtbN/FFmpeg-Builds/releases/**"
+        },
+        {
+          "url": "https://evermeet.cx/ffmpeg/**"
+        },
+        {
+          "url": "https://github.com/jgm/pandoc/releases/**"
+        }
+      ]
+    }
   ]
 }
