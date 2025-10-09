@@ -9,7 +9,10 @@ interface DropZoneProps {
   selectedFile: FileInfo | null;
 }
 
-export default function DropZone({ onFileSelect, selectedFile }: DropZoneProps) {
+export default function DropZone({
+  onFileSelect,
+  selectedFile,
+}: DropZoneProps) {
   const [isDragging, setIsDragging] = useState(false);
 
   const handleDragEnter = useCallback((e: React.DragEvent) => {
@@ -29,23 +32,26 @@ export default function DropZone({ onFileSelect, selectedFile }: DropZoneProps) 
     e.stopPropagation();
   }, []);
 
-  const handleDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDragging(false);
+  const handleDrop = useCallback(
+    (e: React.DragEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setIsDragging(false);
 
-    const files = Array.from(e.dataTransfer.files);
-    if (files.length > 0) {
-      const file = files[0];
-      const fileInfo: FileInfo = {
-        name: file.name,
-        path: file.path || file.name,
-        size: file.size,
-        extension: getFileExtension(file.name),
-      };
-      onFileSelect(fileInfo);
-    }
-  }, [onFileSelect]);
+      const files = Array.from(e.dataTransfer.files);
+      if (files.length > 0) {
+        const file = files[0] as File & { path?: string };
+        const fileInfo: FileInfo = {
+          name: file.name,
+          path: file.path || file.name,
+          size: file.size,
+          extension: getFileExtension(file.name),
+        };
+        onFileSelect(fileInfo);
+      }
+    },
+    [onFileSelect]
+  );
 
   const handleClick = async () => {
     const selected = await open({
@@ -112,7 +118,9 @@ export default function DropZone({ onFileSelect, selectedFile }: DropZoneProps) 
             <p className="text-lg font-bold text-primary">
               Drag & Drop File Here
             </p>
-            <p className="text-sm text-secondary font-normal">or click to browse</p>
+            <p className="text-sm text-secondary font-normal">
+              or click to browse
+            </p>
           </div>
         </div>
       )}

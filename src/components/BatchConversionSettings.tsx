@@ -1,10 +1,5 @@
-import { useState, useEffect } from "react";
-import { invoke } from "@tauri-apps/api/core";
-import {
-  FileInfo,
-  ConversionOption,
-  type BatchConversionSettings,
-} from "../types";
+import { useState } from "react";
+import { FileInfo, type BatchConversionSettings } from "../types";
 import ConversionOptions from "./ConversionOptions";
 
 interface BatchConversionSettingsProps {

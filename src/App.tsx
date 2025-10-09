@@ -2,9 +2,6 @@ import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { open } from "@tauri-apps/plugin-dialog";
-import DropZone from "./components/DropZone";
-import ConversionOptions from "./components/ConversionOptions";
-import AdvancedSettings from "./components/AdvancedSettings";
 import FileConversionRow from "./components/FileConversionRow";
 import BatchConversionSettings from "./components/BatchConversionSettings";
 import ToolDownloader from "./components/ToolDownloader";
@@ -28,8 +25,8 @@ interface ToolStatus {
 function App() {
   const [selectedFiles, setSelectedFiles] = useState<FileInfo[]>([]);
   const [batchSettings, setBatchSettings] = useState<BatchSettings>({});
-  const [advancedOptions, setAdvancedOptions] = useState<string>("");
-  const [outputDirectory, setOutputDirectory] = useState<string>("");
+  const [advancedOptions] = useState<string>("");
+  const [outputDirectory] = useState<string>("");
   const [isConverting, setIsConverting] = useState(false);
   const [conversionProgress, setConversionProgress] = useState(0);
   const [conversionResult, setConversionResult] = useState<{
@@ -115,16 +112,6 @@ function App() {
 
     setBatchSettings(newBatchSettings);
   }, [selectedFiles]);
-
-  const handleFileSelect = (file: FileInfo) => {
-    setSelectedFiles((prev) => [...prev, file]);
-    setConversionResult(null);
-  };
-
-  const handleFilesSelect = (files: FileInfo[]) => {
-    setSelectedFiles((prev) => [...prev, ...files]);
-    setConversionResult(null);
-  };
 
   const removeFile = (index: number) => {
     setSelectedFiles((prev) => prev.filter((_, i) => i !== index));
