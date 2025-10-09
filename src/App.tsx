@@ -293,7 +293,7 @@ function App() {
               // Fallback if we can't get file info
               const fileName =
                 String(filePath).split(/[\\/]/).pop() || "Unknown";
-              const extension = fileName.split(".").pop() || "";
+              const extension = (fileName.split(".").pop() || "").toLowerCase();
 
               return {
                 name: fileName,
@@ -326,7 +326,7 @@ function App() {
         } catch (error) {
           // Fallback for single file
           const fileName = String(selected).split(/[\\/]/).pop() || "Unknown";
-          const extension = fileName.split(".").pop() || "";
+          const extension = (fileName.split(".").pop() || "").toLowerCase();
 
           const fileInfo: FileInfo = {
             name: fileName,

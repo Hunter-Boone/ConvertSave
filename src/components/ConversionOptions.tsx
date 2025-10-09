@@ -27,6 +27,11 @@ const colorMap: Record<string, string> = {
   bmp: "bg-light-purple",
   tiff: "bg-light-tan",
 
+  // Modern formats
+  heic: "bg-aquamarine",
+  heif: "bg-aquamarine",
+  avif: "bg-aquamarine",
+
   // Professional/High-end formats
   tga: "bg-pink",
   exr: "bg-aquamarine",
