@@ -14,8 +14,8 @@
     "windows": [
       {
         "title": "ConvertSave",
-        "width": 800,
-        "height": 600,
+        "width": 1000,
+        "height": 1000,
         "resizable": true,
         "fullscreen": false,
         "center": true,
