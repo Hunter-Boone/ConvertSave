@@ -499,12 +499,7 @@ function App() {
 
   // Show tool downloader if tools aren't ready OR if user manually opens tool manager
   if (toolsReady === false || showToolManager) {
-    return (
-      <ToolDownloader
-        onAllToolsReady={handleToolsReady}
-        isManualOpen={showToolManager}
-      />
-    );
+    return <ToolDownloader onAllToolsReady={handleToolsReady} />;
   }
 
   // Show loading state while checking

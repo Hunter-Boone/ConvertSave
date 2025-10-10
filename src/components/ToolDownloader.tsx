@@ -26,12 +26,10 @@ interface DownloadProgress {
 
 interface ToolDownloaderProps {
   onAllToolsReady: () => void;
-  isManualOpen?: boolean; // Whether user manually opened Tools Manager
 }
 
 export default function ToolDownloader({
   onAllToolsReady,
-  isManualOpen = false,
 }: ToolDownloaderProps) {
   const [toolStatus, setToolStatus] = useState<ToolStatus | null>(null);
   const [downloadingTools, setDownloadingTools] = useState<Set<string>>(
