@@ -69,6 +69,87 @@ fn get_available_formats(input_extension: String) -> Vec<ConversionOption> {
                 color: "lavender".to_string(),
             });
         }
+        "md" | "markdown" => {
+            // Markdown can convert to many formats via Pandoc
+            options.push(ConversionOption {
+                format: "html".to_string(),
+                tool: "pandoc".to_string(),
+                display_name: "HTML Document".to_string(),
+                color: "orange".to_string(),
+            });
+            options.push(ConversionOption {
+                format: "docx".to_string(),
+                tool: "pandoc".to_string(),
+                display_name: "Word Document".to_string(),
+                color: "blue".to_string(),
+            });
+            options.push(ConversionOption {
+                format: "epub".to_string(),
+                tool: "pandoc".to_string(),
+                display_name: "E-Book".to_string(),
+                color: "pink".to_string(),
+            });
+            options.push(ConversionOption {
+                format: "txt".to_string(),
+                tool: "pandoc".to_string(),
+                display_name: "Plain Text".to_string(),
+                color: "lavender".to_string(),
+            });
+        }
+        "html" | "htm" => {
+            // HTML can convert via Pandoc
+            options.push(ConversionOption {
+                format: "md".to_string(),
+                tool: "pandoc".to_string(),
+                display_name: "Markdown".to_string(),
+                color: "blue".to_string(),
+            });
+            options.push(ConversionOption {
+                format: "docx".to_string(),
+                tool: "pandoc".to_string(),
+                display_name: "Word Document".to_string(),
+                color: "blue".to_string(),
+            });
+            options.push(ConversionOption {
+                format: "epub".to_string(),
+                tool: "pandoc".to_string(),
+                display_name: "E-Book".to_string(),
+                color: "pink".to_string(),
+            });
+            options.push(ConversionOption {
+                format: "txt".to_string(),
+                tool: "pandoc".to_string(),
+                display_name: "Plain Text".to_string(),
+                color: "lavender".to_string(),
+            });
+        }
+        "txt" => {
+            // Plain text can convert via Pandoc
+            options.push(ConversionOption {
+                format: "md".to_string(),
+                tool: "pandoc".to_string(),
+                display_name: "Markdown".to_string(),
+                color: "blue".to_string(),
+            });
+            options.push(ConversionOption {
+                format: "html".to_string(),
+                tool: "pandoc".to_string(),
+                display_name: "HTML Document".to_string(),
+                color: "orange".to_string(),
+            });
+            options.push(ConversionOption {
+                format: "docx".to_string(),
+                tool: "pandoc".to_string(),
+                display_name: "Word Document".to_string(),
+                color: "blue".to_string(),
+            });
+            options.push(ConversionOption {
+                format: "epub".to_string(),
+                tool: "pandoc".to_string(),
+                display_name: "E-Book".to_string(),
+                color: "pink".to_string(),
+            });
+        }
         "png" | "jpg" | "jpeg" | "bmp" | "tiff" | "webp" | "gif" | "heic" | "heif" | "avif" | "tga" | "ppm" | "pgm" | "pbm" | "pam" | "xbm" | "xpm" | "dds" | "dpx" | "exr" | "hdr" | "ico" | "j2k" | "jp2" | "pcx" | "pfm" | "sgi" | "sun" | "xwd" => {
             // Standard formats
             if input_extension != "jpg" && input_extension != "jpeg" {
@@ -435,25 +516,39 @@ async fn open_folder(path: String) -> Result<(), String> {
 }
 
 fn determine_conversion_tool(input_ext: &str, output_ext: &str) -> Option<&'static str> {
-    // Image conversions - ffmpeg can handle many image formats including HEIC (input only)
-    // ImageMagick handles HEIC output and all other image formats
+    // Image conversions - ImageMagick supports the widest range of formats
+    // FFmpeg is used as fallback for some formats
     let image_inputs = [
-        // Standard formats
+        // Standard/Common formats
         "jpg", "jpeg", "png", "gif", "bmp", "tiff", "tif", "webp",
         // Modern formats
-        "heic", "heif", "avif",
+        "heic", "heif", "avif", "jxl",
         // Professional/High-end formats
-        "tga", "exr", "hdr", "dpx", "pfm",
-        // JPEG 2000
-        "j2k", "jp2",
+        "tga", "exr", "hdr", "dpx", "pfm", "psd", "psb",
+        // JPEG variants
+        "j2k", "jp2", "jpc", "jpf", "jpx", "jpm",
         // Legacy/Specialized formats
-        "pcx", "ico", "sgi", "sun",
+        "pcx", "ico", "sgi", "sun", "ras", "pict", "pct",
         // Raw/Uncompressed formats
-        "ppm", "pgm", "pbm", "pam",
+        "ppm", "pgm", "pbm", "pam", "pnm", "pfm",
         // X Window System formats
         "xbm", "xpm", "xwd",
         // Gaming/3D formats
-        "dds"
+        "dds", "tga", "vtf",
+        // Vector/Document formats (rasterized)
+        "svg", "svgz", "ai", "eps", "ps", "pdf",
+        // Digital camera RAW formats
+        "arw", "cr2", "cr3", "crw", "dng", "nef", "nrw", "orf", "raf", "raw", "rw2", "rwl", "srw",
+        // Animation formats
+        "mng", "apng",
+        // Windows formats
+        "cur", "dib", "emf", "wmf",
+        // Adobe formats
+        "psd", "psb", "ai",
+        // Other formats
+        "fits", "flif", "jbig", "jng", "miff", "otb", "pal", "palm", "pam", "pcd", "pict", 
+        "pix", "plasma", "pnm", "pwp", "rgf", "sfw", "sgi", "sun", "tga", "uyvy", "vicar", 
+        "viff", "wbmp", "xbm", "xcf", "xpm", "xv", "yuv"
     ];
     let image_outputs_ffmpeg = [
         // Standard formats
@@ -474,16 +569,33 @@ fn determine_conversion_tool(input_ext: &str, output_ext: &str) -> Option<&'stat
         "dds"
     ];
     let image_outputs_imagemagick = [
-        // Standard formats
+        // Standard/Common formats
         "jpg", "jpeg", "png", "gif", "bmp", "tiff", "tif", "webp",
         // Modern formats - ImageMagick supports HEIC/HEIF encoding
-        "heic", "heif", "avif",
+        "heic", "heif", "avif", "jxl",
         // Professional/High-end formats
-        "tga", "exr", "hdr", "dpx",
-        // JPEG 2000
-        "j2k", "jp2", "jpc",
+        "tga", "exr", "hdr", "dpx", "pfm", "psd", "psb",
+        // JPEG variants
+        "j2k", "jp2", "jpc", "jpf", "jpx", "jpm",
         // Legacy/Specialized formats
-        "pcx", "ico",
+        "pcx", "ico", "sgi", "sun", "ras", "pict", "pct",
+        // Raw/Uncompressed formats
+        "ppm", "pgm", "pbm", "pam", "pnm",
+        // X Window System formats
+        "xbm", "xpm", "xwd",
+        // Gaming/3D formats
+        "dds", "tga", "vtf",
+        // Vector/Document formats (rasterized)
+        "svg", "svgz", "pdf",
+        // Animation formats
+        "mng", "apng",
+        // Windows formats
+        "cur", "dib", "emf", "wmf",
+        // Adobe formats
+        "psd", "psb",
+        // Other formats
+        "fits", "jbig", "jng", "miff", "otb", "pal", "palm", "pcd", "pict", 
+        "pix", "plasma", "sfw", "wbmp", "xcf", "xv", "yuv"
     ];
     
     // Video/Audio conversions
@@ -492,8 +604,9 @@ fn determine_conversion_tool(input_ext: &str, output_ext: &str) -> Option<&'stat
     let av_outputs = ["mp4", "mov", "avi", "mkv", "webm", "mp3", "wav", "flac", "ogg", "m4a", "aac", "gif"];
     
     // Document conversions
+    // Note: PDF output requires LaTeX (not included), so it's removed from Pandoc outputs
     let doc_inputs = ["md", "markdown", "txt", "html", "htm", "docx", "odt", "rtf", "tex", "latex", "epub", "rst"];
-    let doc_outputs = ["md", "html", "pdf", "docx", "odt", "rtf", "tex", "epub", "txt"];
+    let doc_outputs = ["md", "html", "docx", "odt", "rtf", "tex", "epub", "txt"];
     
     let office_inputs = ["doc", "docx", "xls", "xlsx", "ppt", "pptx", "odt", "ods", "odp", "rtf"];
     let office_outputs = ["pdf", "html", "txt", "docx", "odt", "rtf"];
@@ -834,12 +947,42 @@ async fn execute_conversion(
                 .unwrap_or("")
                 .to_lowercase();
             
-            // For HEIC/HEIF, set quality
-            if output_ext == "heic" || output_ext == "heif" {
-                command.arg("-quality").arg("85");
+            // Format-specific quality and options
+            match output_ext.as_str() {
+                // Modern compressed formats
+                "heic" | "heif" => {
+                    command.arg("-quality").arg("85");
+                }
+                "avif" => {
+                    command.arg("-quality").arg("85");
+                }
+                "jxl" => {
+                    command.arg("-quality").arg("90"); // JPEG XL benefits from higher quality
+                }
+                "webp" => {
+                    command.arg("-quality").arg("90");
+                }
+                // Standard lossy formats
+                "jpg" | "jpeg" => {
+                    command.arg("-quality").arg("90");
+                }
+                // JPEG 2000 variants
+                "j2k" | "jp2" | "jpc" | "jpf" | "jpx" | "jpm" => {
+                    command.arg("-quality").arg("85");
+                }
+                // Professional formats (high quality)
+                "tiff" | "tif" | "exr" | "hdr" | "dpx" => {
+                    command.arg("-quality").arg("100");
+                }
+                // Vector/document formats
+                "pdf" | "svg" | "svgz" => {
+                    command.arg("-density").arg("300"); // 300 DPI for PDF/vector
+                }
+                // Everything else uses ImageMagick defaults
+                _ => {}
             }
             
-            // Add advanced options if provided
+            // Add advanced options if provided (will override defaults)
             if let Some(options) = advanced_options {
                 let options_parts: Vec<&str> = options.split_whitespace().collect();
                 for part in options_parts {
