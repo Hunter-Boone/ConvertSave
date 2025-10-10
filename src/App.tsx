@@ -20,6 +20,10 @@ interface ToolStatus {
     available: boolean;
     path: string | null;
   };
+  imagemagick: {
+    available: boolean;
+    path: string | null;
+  };
 }
 
 function App() {
@@ -38,6 +42,7 @@ function App() {
   const [isIndividualSettingsExpanded, setIsIndividualSettingsExpanded] =
     useState(false);
   const [toolsReady, setToolsReady] = useState<boolean | null>(null);
+  const [showToolManager, setShowToolManager] = useState(false);
 
   useEffect(() => {
     // Detect platform using user agent as a fallback
@@ -57,6 +62,8 @@ function App() {
   const checkToolsStatus = async () => {
     try {
       const status = await invoke<ToolStatus>("check_tools_status");
+      // Core tools required: FFmpeg and Pandoc
+      // ImageMagick is optional (only needed for HEIC encoding)
       const allReady = status.ffmpeg.available && status.pandoc.available;
       setToolsReady(allReady);
     } catch (err) {
@@ -66,7 +73,9 @@ function App() {
   };
 
   const handleToolsReady = () => {
-    setToolsReady(true);
+    setShowToolManager(false);
+    // Re-check status to update the UI properly
+    checkToolsStatus();
   };
 
   // Update batch settings when files change
@@ -488,9 +497,14 @@ function App() {
     </div>
   );
 
-  // Show tool downloader if tools aren't ready
-  if (toolsReady === false) {
-    return <ToolDownloader onAllToolsReady={handleToolsReady} />;
+  // Show tool downloader if tools aren't ready OR if user manually opens tool manager
+  if (toolsReady === false || showToolManager) {
+    return (
+      <ToolDownloader
+        onAllToolsReady={handleToolsReady}
+        isManualOpen={showToolManager}
+      />
+    );
   }
 
   // Show loading state while checking
@@ -527,8 +541,15 @@ function App() {
           <div className="text-dark-purple font-bold text-sm">ConvertSave</div>
         )}
 
-        {/* Right side - Always has Update button, Controls on Windows/Linux */}
+        {/* Right side - Tools Manager, Update button, Controls on Windows/Linux */}
         <div className="flex items-center space-x-2">
+          <button
+            onClick={() => setShowToolManager(true)}
+            className="btn-chunky bg-light-purple text-dark-purple px-3 py-1 text-sm hover:bg-opacity-80"
+            title="Manage conversion tools"
+          >
+            Tools Manager
+          </button>
           <button className="btn-chunky bg-yellow text-dark-purple px-3 py-1 text-sm">
             Update Available
           </button>

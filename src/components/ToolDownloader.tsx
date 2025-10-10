@@ -12,6 +12,10 @@ interface ToolStatus {
     available: boolean;
     path: string | null;
   };
+  imagemagick: {
+    available: boolean;
+    path: string | null;
+  };
 }
 
 interface DownloadProgress {
@@ -21,10 +25,12 @@ interface DownloadProgress {
 
 interface ToolDownloaderProps {
   onAllToolsReady: () => void;
+  isManualOpen?: boolean; // Whether user manually opened Tools Manager
 }
 
 export default function ToolDownloader({
   onAllToolsReady,
+  isManualOpen = false,
 }: ToolDownloaderProps) {
   const [toolStatus, setToolStatus] = useState<ToolStatus | null>(null);
   const [downloadingTool, setDownloadingTool] = useState<string | null>(null);
@@ -69,17 +75,20 @@ export default function ToolDownloader({
   }, []); // Empty dependency array so listener is only registered once
 
   useEffect(() => {
+    // Only auto-transition on initial load, not when manually opened
     if (
+      !isManualOpen &&
       toolStatus &&
       toolStatus.ffmpeg.available &&
       toolStatus.pandoc.available
+      // ImageMagick is optional - not required for auto-transition
     ) {
       // Short delay before transitioning to allow UI to update
       setTimeout(() => {
         onAllToolsReady();
       }, 500);
     }
-  }, [toolStatus, onAllToolsReady]);
+  }, [toolStatus, onAllToolsReady, isManualOpen]);
 
   const checkToolsStatus = async () => {
     try {
@@ -102,6 +111,8 @@ export default function ToolDownloader({
         await invoke("download_ffmpeg");
       } else if (toolName === "pandoc") {
         await invoke("download_pandoc");
+      } else if (toolName === "imagemagick") {
+        await invoke("download_imagemagick");
       }
       // Note: Success is handled by the download-progress event listener
     } catch (err) {
@@ -122,8 +133,10 @@ export default function ToolDownloader({
     );
   }
 
-  const allToolsReady =
+  // Core tools required: FFmpeg and Pandoc. ImageMagick is optional.
+  const coreToolsReady =
     toolStatus.ffmpeg.available && toolStatus.pandoc.available;
+  const allToolsReady = coreToolsReady && toolStatus.imagemagick.available;
 
   return (
     <div className="flex items-center justify-center min-h-screen bg-off-white p-6">
@@ -237,6 +250,66 @@ export default function ToolDownloader({
               )}
             </div>
           </div>
+
+          {/* ImageMagick Card */}
+          <div className="bg-white border-2 border-light-purple rounded-xl p-6">
+            <div className="flex items-center justify-between">
+              <div className="flex-1">
+                <div className="flex items-center space-x-3">
+                  <h3 className="text-xl font-bold text-dark-purple">
+                    ImageMagick
+                  </h3>
+                  {toolStatus.imagemagick.available ? (
+                    <div className="flex items-center space-x-1 bg-aquamarine text-dark-purple px-3 py-1 rounded-full text-sm font-bold">
+                      <Check className="w-4 h-4" />
+                      <span>Ready</span>
+                    </div>
+                  ) : (
+                    <div className="flex items-center space-x-1 bg-tan text-dark-purple px-3 py-1 rounded-full text-sm font-bold">
+                      <span>Optional</span>
+                    </div>
+                  )}
+                </div>
+                <p className="text-light-purple mt-2">
+                  <strong>Optional:</strong> For HEIC encoding. Due to download
+                  issues, you may need to{" "}
+                  <a
+                    href="https://imagemagick.org/script/download.php#windows"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-dark-purple underline hover:text-aquamarine"
+                  >
+                    install manually
+                  </a>
+                </p>
+                {toolStatus.imagemagick.available &&
+                  toolStatus.imagemagick.path && (
+                    <p className="text-xs text-light-purple mt-1 font-mono">
+                      {toolStatus.imagemagick.path}
+                    </p>
+                  )}
+              </div>
+              {!toolStatus.imagemagick.available && (
+                <button
+                  onClick={() => downloadTool("imagemagick")}
+                  disabled={downloadingTool === "imagemagick"}
+                  className="btn-chunky bg-aquamarine text-dark-purple px-6 py-3 flex items-center space-x-2"
+                >
+                  {downloadingTool === "imagemagick" ? (
+                    <>
+                      <Loader className="w-5 h-5 animate-spin" />
+                      <span>Downloading...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Download className="w-5 h-5" />
+                      <span>Download</span>
+                    </>
+                  )}
+                </button>
+              )}
+            </div>
+          </div>
         </div>
 
         {/* Download Progress */}
@@ -303,6 +376,18 @@ export default function ToolDownloader({
             </a>
             .
           </p>
+          <p>
+            <strong>ImageMagick</strong> is licensed under the{" "}
+            <a
+              href="https://imagemagick.org/script/license.php"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-dark-purple underline hover:text-aquamarine"
+            >
+              Apache 2.0 License
+            </a>
+            .
+          </p>
           <p className="text-xs">
             These tools are downloaded on first use to comply with their
             respective licenses and to keep the application size small.
@@ -322,6 +407,18 @@ export default function ToolDownloader({
               All tools are ready! You can now convert files.
             </p>
           </div>
+        ) : coreToolsReady ? (
+          <div className="text-center space-y-3">
+            <button
+              onClick={onAllToolsReady}
+              className="btn-chunky bg-aquamarine text-dark-purple px-8 py-4 text-lg w-full"
+            >
+              Continue to ConvertSave
+            </button>
+            <p className="text-sm text-light-purple">
+              Core tools ready! ImageMagick (optional) can be added later.
+            </p>
+          </div>
         ) : (
           <div className="text-center space-y-3">
             <button
@@ -331,8 +428,7 @@ export default function ToolDownloader({
               Skip for Now
             </button>
             <p className="text-xs text-light-purple">
-              You can download tools later, but conversions won't work until
-              they're installed.
+              FFmpeg and Pandoc are required for most conversions.
             </p>
           </div>
         )}

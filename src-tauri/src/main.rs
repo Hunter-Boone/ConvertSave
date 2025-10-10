@@ -121,12 +121,13 @@ fn get_available_formats(input_extension: String) -> Vec<ConversionOption> {
             }
             
             // Modern formats
+            // HEIC/HEIF encoding now supported via ImageMagick
             if input_extension != "heic" && input_extension != "heif" {
                 options.push(ConversionOption {
                     format: "heic".to_string(),
-                    tool: "ffmpeg".to_string(),
-                    display_name: "HEIC (Apple)".to_string(),
-                    color: "aquamarine".to_string(),
+                    tool: "imagemagick".to_string(),
+                    display_name: "HEIC (High Efficiency)".to_string(),
+                    color: "pink".to_string(),
                 });
             }
             if input_extension != "avif" {
@@ -434,7 +435,8 @@ async fn open_folder(path: String) -> Result<(), String> {
 }
 
 fn determine_conversion_tool(input_ext: &str, output_ext: &str) -> Option<&'static str> {
-    // Image conversions - ffmpeg can handle many image formats including HEIC
+    // Image conversions - ffmpeg can handle many image formats including HEIC (input only)
+    // ImageMagick handles HEIC output and all other image formats
     let image_inputs = [
         // Standard formats
         "jpg", "jpeg", "png", "gif", "bmp", "tiff", "tif", "webp",
@@ -453,11 +455,11 @@ fn determine_conversion_tool(input_ext: &str, output_ext: &str) -> Option<&'stat
         // Gaming/3D formats
         "dds"
     ];
-    let image_outputs = [
+    let image_outputs_ffmpeg = [
         // Standard formats
         "jpg", "jpeg", "png", "gif", "bmp", "tiff", "tif", "webp",
-        // Modern formats
-        "heic", "heif", "avif",
+        // Modern formats (AVIF only, HEIC/HEIF use ImageMagick)
+        "avif",
         // Professional/High-end formats
         "tga", "exr", "hdr", "dpx", "pfm",
         // JPEG 2000
@@ -470,6 +472,18 @@ fn determine_conversion_tool(input_ext: &str, output_ext: &str) -> Option<&'stat
         "xbm", "xpm", "xwd",
         // Gaming/3D formats
         "dds"
+    ];
+    let image_outputs_imagemagick = [
+        // Standard formats
+        "jpg", "jpeg", "png", "gif", "bmp", "tiff", "tif", "webp",
+        // Modern formats - ImageMagick supports HEIC/HEIF encoding
+        "heic", "heif", "avif",
+        // Professional/High-end formats
+        "tga", "exr", "hdr", "dpx",
+        // JPEG 2000
+        "j2k", "jp2", "jpc",
+        // Legacy/Specialized formats
+        "pcx", "ico",
     ];
     
     // Video/Audio conversions
@@ -487,7 +501,14 @@ fn determine_conversion_tool(input_ext: &str, output_ext: &str) -> Option<&'stat
     // Use ffmpeg for media and image conversions
     if (video_inputs.contains(&input_ext) || audio_inputs.contains(&input_ext)) && av_outputs.contains(&output_ext) {
         Some("ffmpeg")
-    } else if image_inputs.contains(&input_ext) && image_outputs.contains(&output_ext) {
+    } else if image_inputs.contains(&input_ext) && output_ext == "heic" || output_ext == "heif" {
+        // HEIC/HEIF encoding requires ImageMagick
+        Some("imagemagick")
+    } else if image_inputs.contains(&input_ext) && image_outputs_imagemagick.contains(&output_ext) {
+        // Try ImageMagick first for image conversions, but will fallback to FFmpeg if not available
+        Some("imagemagick")
+    } else if image_inputs.contains(&input_ext) && image_outputs_ffmpeg.contains(&output_ext) {
+        // Fallback to ffmpeg for formats ImageMagick doesn't support well
         Some("ffmpeg")
     } else if doc_inputs.contains(&input_ext) && doc_outputs.contains(&output_ext) {
         Some("pandoc")
@@ -520,6 +541,13 @@ fn get_tool_path(tool_name: &str) -> Result<PathBuf, String> {
                 "pandoc.exe"
             } else {
                 "pandoc"
+            }
+        }
+        "imagemagick" => {
+            if cfg!(target_os = "windows") {
+                "magick.exe"
+            } else {
+                "magick"
             }
         }
         _ => return Err(format!("Unknown tool: {}", tool_name)),
@@ -752,11 +780,75 @@ async fn execute_conversion(
     output_path: &PathBuf,
     advanced_options: Option<String>,
 ) -> Result<(), String> {
-    let tool_path = get_tool_path(tool_name)?;
+    // Determine the actual tool to use (with ImageMagick fallback logic)
+    let (actual_tool, tool_path) = match get_tool_path(tool_name) {
+        Ok(path) => (tool_name, path),
+        Err(e) => {
+            // If ImageMagick is not available, try to fallback to FFmpeg for image conversions
+            if tool_name == "imagemagick" {
+                let output_ext = output_path.extension()
+                    .and_then(|ext| ext.to_str())
+                    .unwrap_or("")
+                    .to_lowercase();
+                
+                // HEIC/HEIF requires ImageMagick, no fallback available
+                if output_ext == "heic" || output_ext == "heif" {
+                    return Err(format!(
+                        "ImageMagick is required for HEIC/HEIF encoding but is not installed.\n\n\
+                        Please install ImageMagick manually from:\n\
+                        https://imagemagick.org/script/download.php\n\n\
+                        Or use the Tools Manager in the app to download it."
+                    ));
+                }
+                
+                // Try to use FFmpeg as fallback for other image formats
+                match get_tool_path("ffmpeg") {
+                    Ok(ffmpeg_path) => {
+                        println!("ImageMagick not available, using FFmpeg fallback for image conversion");
+                        ("ffmpeg", ffmpeg_path)
+                    }
+                    Err(_) => {
+                        return Err(format!(
+                            "ImageMagick is not installed and FFmpeg fallback failed.\n\n{}", e
+                        ));
+                    }
+                }
+            } else {
+                return Err(e);
+            }
+        }
+    };
     
     let mut command = Command::new(&tool_path);
     
-    match tool_name {
+    match actual_tool {
+        "imagemagick" => {
+            // ImageMagick 7 syntax: magick input.jpg [options] output.heic
+            // Note: ImageMagick 7 doesn't use "convert" as a subcommand
+            command.arg(input_path);
+            
+            // Check output format for special handling
+            let output_ext = output_path
+                .extension()
+                .and_then(|ext| ext.to_str())
+                .unwrap_or("")
+                .to_lowercase();
+            
+            // For HEIC/HEIF, set quality
+            if output_ext == "heic" || output_ext == "heif" {
+                command.arg("-quality").arg("85");
+            }
+            
+            // Add advanced options if provided
+            if let Some(options) = advanced_options {
+                let options_parts: Vec<&str> = options.split_whitespace().collect();
+                for part in options_parts {
+                    command.arg(part);
+                }
+            }
+            
+            command.arg(output_path);
+        }
         "ffmpeg" => {
             // Check input format for special HEIC handling
             let input_ext = input_path
@@ -772,22 +864,14 @@ async fn execute_conversion(
             
             command.arg("-i").arg(input_path);
             
-            // Check if we're converting to HEIC/HEIF and add required codec settings
+            // Check if we're converting to special formats
             let output_ext = output_path
                 .extension()
                 .and_then(|ext| ext.to_str())
                 .unwrap_or("")
                 .to_lowercase();
             
-            if output_ext == "heic" || output_ext == "heif" {
-                // HEIC/HEIF requires libx265 codec with specific settings
-                // Force MOV format since FFmpeg doesn't have a native HEIC muxer
-                command.arg("-f").arg("mov");
-                command.arg("-c:v").arg("libx265");
-                command.arg("-tag:v").arg("hvc1");
-                // Optional: Set quality (lower CRF = higher quality, 23 is default)
-                command.arg("-crf").arg("23");
-            } else if output_ext == "avif" {
+            if output_ext == "avif" {
                 // AVIF uses libaom-av1 or libsvtav1 codec
                 command.arg("-c:v").arg("libaom-av1");
                 command.arg("-crf").arg("30");
@@ -979,6 +1063,133 @@ async fn download_pandoc(app: AppHandle) -> Result<String, String> {
 }
 
 #[tauri::command]
+async fn download_imagemagick(app: AppHandle) -> Result<String, String> {
+    let data_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
+    std::fs::create_dir_all(&data_dir).map_err(|e| e.to_string())?;
+    
+    let (download_url, filename, is_zip) = get_imagemagick_download_info()?;
+    println!("=== IMAGEMAGICK DOWNLOAD ===");
+    println!("Download URL: {}", download_url);
+    println!("Data dir: {}", data_dir.display());
+    println!("Filename: {}", filename);
+    println!("Is ZIP: {}", is_zip);
+    
+    let magick_exe = if cfg!(windows) { "magick.exe" } else { "magick" };
+    let magick_path = data_dir.join("imagemagick").join(magick_exe);
+    
+    if magick_path.exists() {
+        println!("ImageMagick already exists at: {}", magick_path.display());
+        return Ok("ImageMagick already downloaded".to_string());
+    }
+    
+    app.emit("download-progress", DownloadProgress {
+        status: "downloading".to_string(),
+        message: "Downloading ImageMagick...".to_string(),
+    }).map_err(|e| e.to_string())?;
+    
+    println!("Starting download from: {}", download_url);
+    let response = reqwest::get(&download_url).await.map_err(|e| {
+        println!("Download request failed: {}", e);
+        format!("Failed to download ImageMagick: {}", e)
+    })?;
+    
+    println!("Download response status: {:?}", response.status());
+    let bytes = response.bytes().await.map_err(|e| {
+        println!("Failed to read bytes: {}", e);
+        format!("Failed to read download data: {}", e)
+    })?;
+    
+    println!("Downloaded {} bytes", bytes.len());
+    
+    let extract_dir = data_dir.join("imagemagick");
+    std::fs::create_dir_all(&extract_dir).map_err(|e| e.to_string())?;
+    
+    // Linux downloads a raw binary, no extraction needed
+    if cfg!(target_os = "linux") {
+        app.emit("download-progress", DownloadProgress {
+            status: "installing".to_string(),
+            message: "Installing ImageMagick...".to_string(),
+        }).map_err(|e| e.to_string())?;
+        
+        println!("Writing binary directly to: {}", magick_path.display());
+        std::fs::write(&magick_path, bytes).map_err(|e| e.to_string())?;
+        
+        // Make executable on Unix systems
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&magick_path, std::fs::Permissions::from_mode(0o755))
+                .map_err(|e| e.to_string())?;
+        }
+    } else {
+        // Windows and macOS need extraction
+        let archive_path = data_dir.join(&filename);
+        println!("Writing archive to: {}", archive_path.display());
+        
+        std::fs::write(&archive_path, bytes).map_err(|e| {
+            println!("Failed to write archive: {}", e);
+            e.to_string()
+        })?;
+        
+        println!("Archive written successfully, size: {} bytes", std::fs::metadata(&archive_path).map(|m| m.len()).unwrap_or(0));
+        
+        app.emit("download-progress", DownloadProgress {
+            status: "extracting".to_string(),
+            message: "Extracting ImageMagick...".to_string(),
+        }).map_err(|e| e.to_string())?;
+        
+        println!("Starting extraction to: {}", extract_dir.display());
+        println!("Looking for binary: {}", magick_exe);
+        
+        if is_zip {
+            // Special handling for ImageMagick .7z.zip files on Windows
+            if filename == "imagemagick-windows.zip" {
+                println!("Extracting ImageMagick .7z.zip nested archive...");
+                match extract_imagemagick_7z_zip(&archive_path, &extract_dir) {
+                    Ok(_) => {
+                        println!("ImageMagick extraction successful!");
+                    },
+                    Err(e) => {
+                        println!("ImageMagick extraction failed: {}", e);
+                        std::fs::remove_file(&archive_path).ok();
+                        return Err(format!("Failed to extract ImageMagick: {}", e));
+                    }
+                }
+            } else {
+                // Regular ZIP extraction for other tools
+                match extract_zip(&archive_path, &extract_dir, magick_exe) {
+                    Ok(_) => {
+                        println!("Extraction successful!");
+                    },
+                    Err(e) => {
+                        println!("Extraction failed: {}", e);
+                        std::fs::remove_file(&archive_path).ok();
+                        return Err(format!("Failed to extract ZIP: {}", e));
+                    }
+                }
+            }
+        } else {
+            extract_tar_gz(&archive_path, &extract_dir, magick_exe)?;
+        }
+        
+        println!("Removing archive file: {}", archive_path.display());
+        std::fs::remove_file(&archive_path).map_err(|e| e.to_string())?;
+    }
+    
+    // Verify the file was actually extracted
+    if !magick_path.exists() {
+        return Err(format!("ImageMagick binary not found after extraction at: {}", magick_path.display()));
+    }
+    
+    app.emit("download-progress", DownloadProgress {
+        status: "complete".to_string(),
+        message: "ImageMagick downloaded successfully!".to_string(),
+    }).map_err(|e| e.to_string())?;
+    
+    Ok("ImageMagick downloaded successfully".to_string())
+}
+
+#[tauri::command]
 async fn test_tool(tool_name: String) -> Result<String, String> {
     let tool_path = match get_tool_path(&tool_name) {
         Ok(path) => path,
@@ -987,6 +1198,7 @@ async fn test_tool(tool_name: String) -> Result<String, String> {
         }
     };
     
+    // ImageMagick uses -version, FFmpeg and Pandoc use -version too
     let output = Command::new(&tool_path)
         .arg("-version")
         .output()
@@ -1039,6 +1251,23 @@ async fn check_tools_status() -> Result<serde_json::Value, String> {
     };
     status.insert("pandoc".to_string(), pandoc_status);
     
+    // Check imagemagick
+    let imagemagick_status = match get_tool_path("imagemagick") {
+        Ok(path) => {
+            serde_json::json!({
+                "available": true,
+                "path": path.to_string_lossy().to_string()
+            })
+        }
+        Err(_) => {
+            serde_json::json!({
+                "available": false,
+                "path": null
+            })
+        }
+    };
+    status.insert("imagemagick".to_string(), imagemagick_status);
+    
     Ok(serde_json::Value::Object(status))
 }
 
@@ -1090,9 +1319,102 @@ fn get_pandoc_download_info() -> Result<(String, String, bool), String> {
     }
 }
 
+fn get_imagemagick_download_info() -> Result<(String, String, bool), String> {
+    if cfg!(target_os = "windows") {
+        // ImageMagick portable .7z.zip from https://imagemagick.org/archive/binaries/
+        // This is a ZIP containing a 7z file containing the binaries
+        Ok((
+            "https://imagemagick.org/archive/binaries/ImageMagick-7.1.2-5-portable-Q16-HDRI-x64.7z.zip".to_string(),
+            "imagemagick-windows.zip".to_string(),
+            true,
+        ))
+    } else if cfg!(target_os = "macos") {
+        // For macOS from https://imagemagick.org/archive/binaries/
+        Ok((
+            "https://imagemagick.org/archive/binaries/ImageMagick-x86_64-apple-darwin20.1.0.tar.gz".to_string(),
+            "imagemagick-macos.tar.gz".to_string(),
+            false,
+        ))
+    } else {
+        // For Linux - AppImage from https://imagemagick.org/archive/binaries/
+        Ok((
+            "https://imagemagick.org/archive/binaries/magick".to_string(),
+            "imagemagick-linux".to_string(),
+            false,
+        ))
+    }
+}
+
+// Special extractor for ImageMagick .7z.zip nested archives
+fn extract_imagemagick_7z_zip(archive_path: &PathBuf, extract_dir: &PathBuf) -> Result<(), String> {
+    
+    println!("Opening outer ZIP: {}", archive_path.display());
+    let file = std::fs::File::open(archive_path).map_err(|e| e.to_string())?;
+    let mut archive = zip::ZipArchive::new(file).map_err(|e| e.to_string())?;
+    
+    // Extract outer ZIP to temp location
+    let temp_dir = extract_dir.join("temp_outer");
+    std::fs::create_dir_all(&temp_dir).map_err(|e| e.to_string())?;
+    
+    println!("Extracting outer ZIP ({} files)...", archive.len());
+    for i in 0..archive.len() {
+        let mut file = archive.by_index(i).map_err(|e| e.to_string())?;
+        let outpath = match file.enclosed_name() {
+            Some(path) => temp_dir.join(path),
+            None => continue,
+        };
+        
+        if file.name().ends_with('/') {
+            std::fs::create_dir_all(&outpath).map_err(|e| e.to_string())?;
+        } else {
+            if let Some(p) = outpath.parent() {
+                std::fs::create_dir_all(p).map_err(|e| e.to_string())?;
+            }
+            let mut outfile = std::fs::File::create(&outpath).map_err(|e| e.to_string())?;
+            std::io::copy(&mut file, &mut outfile).map_err(|e| e.to_string())?;
+            println!("Extracted: {}", outpath.display());
+        }
+    }
+    
+    // Find the .7z file inside
+    fn find_7z_file(dir: &std::path::Path) -> Option<std::path::PathBuf> {
+        if let Ok(entries) = std::fs::read_dir(dir) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.is_file() && path.extension().and_then(|s| s.to_str()) == Some("7z") {
+                    return Some(path);
+                } else if path.is_dir() {
+                    if let Some(found) = find_7z_file(&path) {
+                        return Some(found);
+                    }
+                }
+            }
+        }
+        None
+    }
+    
+    let sevenz_path = find_7z_file(&temp_dir)
+        .ok_or_else(|| "Could not find .7z file inside ZIP".to_string())?;
+    
+    println!("Found 7z archive: {}", sevenz_path.display());
+    
+    // Extract the .7z file
+    println!("Extracting 7z archive...");
+    sevenz_rust::decompress_file(&sevenz_path, extract_dir)
+        .map_err(|e| format!("Failed to extract 7z: {}", e))?;
+    
+    // Clean up temp directory
+    std::fs::remove_dir_all(&temp_dir).ok();
+    
+    println!("7z extraction complete!");
+    Ok(())
+}
+
 fn extract_zip(archive_path: &PathBuf, extract_dir: &PathBuf, binary_name: &str) -> Result<(), String> {
     let file = std::fs::File::open(archive_path).map_err(|e| e.to_string())?;
     let mut archive = zip::ZipArchive::new(file).map_err(|e| e.to_string())?;
+    
+    println!("ZIP archive has {} files", archive.len());
     
     let exe_name = if cfg!(windows) {
         format!("{}.exe", binary_name)
@@ -1100,12 +1422,16 @@ fn extract_zip(archive_path: &PathBuf, extract_dir: &PathBuf, binary_name: &str)
         binary_name.to_string()
     };
     
+    // First, try to find the binary directly in the ZIP
     for i in 0..archive.len() {
         let mut file = archive.by_index(i).map_err(|e| e.to_string())?;
         let path = file.enclosed_name().unwrap_or_else(|| std::path::Path::new(""));
         
+        println!("Checking file in ZIP: {}", path.display());
+        
         if let Some(filename) = path.file_name() {
             if filename == exe_name.as_str() || filename.to_string_lossy().ends_with(&exe_name) {
+                println!("Found binary directly in ZIP: {}", path.display());
                 let outpath = extract_dir.join(&exe_name);
                 let mut outfile = std::fs::File::create(&outpath).map_err(|e| e.to_string())?;
                 std::io::copy(&mut file, &mut outfile).map_err(|e| e.to_string())?;
@@ -1121,7 +1447,75 @@ fn extract_zip(archive_path: &PathBuf, extract_dir: &PathBuf, binary_name: &str)
         }
     }
     
-    Err(format!("{} binary not found in archive", binary_name))
+    // If not found directly, extract everything and search recursively
+    // This handles nested archives (like .7z.zip files)
+    println!("Binary not found directly in ZIP, extracting all files...");
+    let temp_extract = extract_dir.join("temp_extract");
+    std::fs::create_dir_all(&temp_extract).map_err(|e| e.to_string())?;
+    
+    let file = std::fs::File::open(archive_path).map_err(|e| e.to_string())?;
+    let mut archive = zip::ZipArchive::new(file).map_err(|e| e.to_string())?;
+    
+    for i in 0..archive.len() {
+        let mut file = archive.by_index(i).map_err(|e| e.to_string())?;
+        let outpath = match file.enclosed_name() {
+            Some(path) => temp_extract.join(path),
+            None => continue,
+        };
+        
+        if file.name().ends_with('/') {
+            std::fs::create_dir_all(&outpath).map_err(|e| e.to_string())?;
+        } else {
+            if let Some(p) = outpath.parent() {
+                std::fs::create_dir_all(p).map_err(|e| e.to_string())?;
+            }
+            let mut outfile = std::fs::File::create(&outpath).map_err(|e| e.to_string())?;
+            std::io::copy(&mut file, &mut outfile).map_err(|e| e.to_string())?;
+        }
+    }
+    
+    // Now search for the binary in the extracted files
+    fn find_binary(dir: &std::path::Path, name: &str) -> Option<std::path::PathBuf> {
+        if let Ok(entries) = std::fs::read_dir(dir) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.is_file() {
+                    if let Some(filename) = path.file_name() {
+                        if filename.to_string_lossy() == name {
+                            return Some(path);
+                        }
+                    }
+                } else if path.is_dir() {
+                    if let Some(found) = find_binary(&path, name) {
+                        return Some(found);
+                    }
+                }
+            }
+        }
+        None
+    }
+    
+    if let Some(binary_path) = find_binary(&temp_extract, &exe_name) {
+        println!("Found binary at: {}", binary_path.display());
+        let outpath = extract_dir.join(&exe_name);
+        std::fs::copy(&binary_path, &outpath).map_err(|e| e.to_string())?;
+        
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&outpath, std::fs::Permissions::from_mode(0o755))
+                .map_err(|e| e.to_string())?;
+        }
+        
+        // Clean up temp extraction
+        std::fs::remove_dir_all(&temp_extract).ok();
+        return Ok(());
+    }
+    
+    // Clean up temp extraction
+    std::fs::remove_dir_all(&temp_extract).ok();
+    
+    Err(format!("{} binary not found in archive (checked all files)", binary_name))
 }
 
 fn extract_tar_gz(archive_path: &PathBuf, extract_dir: &PathBuf, binary_name: &str) -> Result<(), String> {
@@ -1202,6 +1596,7 @@ pub fn run() {
             open_folder,
             download_ffmpeg,
             download_pandoc,
+            download_imagemagick,
             test_tool,
             check_tools_status
         ])
