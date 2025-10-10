@@ -34,7 +34,9 @@ export default function ToolDownloader({
   isManualOpen = false,
 }: ToolDownloaderProps) {
   const [toolStatus, setToolStatus] = useState<ToolStatus | null>(null);
-  const [downloadingTool, setDownloadingTool] = useState<string | null>(null);
+  const [downloadingTools, setDownloadingTools] = useState<Set<string>>(
+    new Set()
+  );
   const [downloadProgress, setDownloadProgress] =
     useState<DownloadProgress | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -57,12 +59,16 @@ export default function ToolDownloader({
     const unlisten = listen<DownloadProgress>("download-progress", (event) => {
       setDownloadProgress(event.payload);
       if (event.payload.status === "complete") {
-        // Store the tool name before clearing state
-        setDownloadingTool((current) => {
-          if (current) {
-            setSuccessMessage(`${current} downloaded successfully!`);
-          }
-          return null;
+        // Extract tool name from the message (e.g., "FFmpeg download complete!")
+        const toolName = event.payload.message.toLowerCase().split(" ")[0];
+
+        setSuccessMessage(`${toolName} downloaded successfully!`);
+
+        // Remove this tool from downloading set
+        setDownloadingTools((prev) => {
+          const newSet = new Set(prev);
+          newSet.delete(toolName);
+          return newSet;
         });
 
         // Immediately check status to update UI
@@ -86,21 +92,8 @@ export default function ToolDownloader({
     };
   }, []); // Empty dependency array so listener is only registered once
 
-  useEffect(() => {
-    // Only auto-transition on initial load, not when manually opened
-    if (
-      !isManualOpen &&
-      toolStatus &&
-      toolStatus.ffmpeg.available &&
-      toolStatus.pandoc.available
-      // ImageMagick is optional - not required for auto-transition
-    ) {
-      // Short delay before transitioning to allow UI to update
-      setTimeout(() => {
-        onAllToolsReady();
-      }, 500);
-    }
-  }, [toolStatus, onAllToolsReady, isManualOpen]);
+  // Auto-transition removed - user must manually close Tools Manager
+  // This prevents issues with screen refreshing/flashing
 
   const checkToolsStatus = async () => {
     try {
@@ -113,7 +106,8 @@ export default function ToolDownloader({
   };
 
   const downloadTool = async (toolName: string) => {
-    setDownloadingTool(toolName);
+    // Add to downloading set
+    setDownloadingTools((prev) => new Set(prev).add(toolName));
     setDownloadProgress(null);
     setError(null);
     setSuccessMessage(null);
@@ -129,7 +123,12 @@ export default function ToolDownloader({
       // Note: Success is handled by the download-progress event listener
     } catch (err) {
       setError(`Failed to download ${toolName}: ${err}`);
-      setDownloadingTool(null);
+      // Remove from downloading set on error
+      setDownloadingTools((prev) => {
+        const newSet = new Set(prev);
+        newSet.delete(toolName);
+        return newSet;
+      });
       setDownloadProgress(null);
     }
   };
@@ -379,10 +378,10 @@ export default function ToolDownloader({
                   {!toolStatus.ffmpeg.available && (
                     <button
                       onClick={() => downloadTool("ffmpeg")}
-                      disabled={downloadingTool === "ffmpeg"}
+                      disabled={downloadingTools.has("ffmpeg")}
                       className="btn-chunky bg-aquamarine text-dark-purple px-6 py-3 flex items-center space-x-2"
                     >
-                      {downloadingTool === "ffmpeg" ? (
+                      {downloadingTools.has("ffmpeg") ? (
                         <>
                           <Loader className="w-5 h-5 animate-spin" />
                           <span>Downloading...</span>
@@ -430,10 +429,10 @@ export default function ToolDownloader({
                   {!toolStatus.pandoc.available && (
                     <button
                       onClick={() => downloadTool("pandoc")}
-                      disabled={downloadingTool === "pandoc"}
+                      disabled={downloadingTools.has("pandoc")}
                       className="btn-chunky bg-aquamarine text-dark-purple px-6 py-3 flex items-center space-x-2"
                     >
-                      {downloadingTool === "pandoc" ? (
+                      {downloadingTools.has("pandoc") ? (
                         <>
                           <Loader className="w-5 h-5 animate-spin" />
                           <span>Downloading...</span>
@@ -463,7 +462,7 @@ export default function ToolDownloader({
                           <span>Ready</span>
                         </div>
                       ) : (
-                        <div className="flex items-center space-x-1 bg-light-purple text-white px-3 py-1 rounded-full text-sm font-bold">
+                        <div className="flex items-center space-x-1 bg-yellow text-dark-purple px-3 py-1 rounded-full text-sm font-bold">
                           <X className="w-4 h-4" />
                           <span>Not Available</span>
                         </div>
@@ -482,10 +481,10 @@ export default function ToolDownloader({
                   {!toolStatus.imagemagick.available && (
                     <button
                       onClick={() => downloadTool("imagemagick")}
-                      disabled={downloadingTool === "imagemagick"}
+                      disabled={downloadingTools.has("imagemagick")}
                       className="btn-chunky bg-aquamarine text-dark-purple px-6 py-3 flex items-center space-x-2"
                     >
-                      {downloadingTool === "imagemagick" ? (
+                      {downloadingTools.has("imagemagick") ? (
                         <>
                           <Loader className="w-5 h-5 animate-spin" />
                           <span>Downloading...</span>
