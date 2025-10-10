@@ -1,6 +1,7 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { listen } from "@tauri-apps/api/event";
 import { open } from "@tauri-apps/plugin-dialog";
 import FileConversionRow from "./components/FileConversionRow";
 import BatchConversionSettings from "./components/BatchConversionSettings";
@@ -43,6 +44,8 @@ function App() {
     useState(false);
   const [toolsReady, setToolsReady] = useState<boolean | null>(null);
   const [showToolManager, setShowToolManager] = useState(false);
+  const [isDraggingOver, setIsDraggingOver] = useState(false);
+  const isProcessingDrop = useRef(false);
 
   useEffect(() => {
     // Detect platform using user agent as a fallback
@@ -57,6 +60,117 @@ function App() {
 
     // Check if tools are ready
     checkToolsStatus();
+
+    // Set up Tauri file drop listener using window API
+    let unlisten: (() => void) | undefined;
+
+    const setupFileDropListener = async () => {
+      const handleFileDrop = async (paths: string[]) => {
+        if (isProcessingDrop.current) {
+          console.warn("Already processing a drop, ignoring duplicate event");
+          return;
+        }
+
+        isProcessingDrop.current = true;
+        console.log("File drop - processing", paths.length, "file(s)");
+
+        if (paths.length === 0) {
+          console.warn("No files in drop event");
+          isProcessingDrop.current = false;
+          return;
+        }
+
+        // Get file info for all dropped files
+        const fileInfos = await Promise.all(
+          paths.map(async (filePath) => {
+            try {
+              const stats = (await invoke("get_file_info", {
+                path: filePath,
+              })) as {
+                name: string;
+                size: number;
+                extension: string;
+              };
+
+              console.log("Got file stats:", stats);
+
+              return {
+                name: stats.name,
+                path: filePath,
+                size: stats.size,
+                extension: stats.extension,
+              };
+            } catch (error) {
+              console.error("Error getting file info:", error);
+              // Fallback if we can't get file info
+              const fileName =
+                String(filePath).split(/[\\/]/).pop() || "Unknown";
+              const extension = (fileName.split(".").pop() || "").toLowerCase();
+
+              return {
+                name: fileName,
+                path: filePath,
+                size: 0,
+                extension: extension,
+              };
+            }
+          })
+        );
+
+        console.log("Adding files:", fileInfos);
+        setSelectedFiles((prev) => [...prev, ...fileInfos]);
+
+        // Reset processing flag after a short delay to prevent rapid duplicates
+        setTimeout(() => {
+          isProcessingDrop.current = false;
+        }, 100);
+      };
+
+      // Listen to drag hover event (when dragging over the window)
+      const unlistenHover = await listen<{
+        paths: string[];
+        position: { x: number; y: number };
+      }>("tauri://drag-enter", () => {
+        console.log("Drag enter - showing overlay");
+        setIsDraggingOver(true);
+      });
+
+      // Listen to the drag-drop event (when files are dropped)
+      const unlistenDrop = await listen<{
+        paths: string[];
+        position: { x: number; y: number };
+      }>("tauri://drag-drop", async (event) => {
+        console.log("Drop event - processing files");
+        setIsDraggingOver(false);
+        // Extract paths from the payload object
+        if (event.payload && event.payload.paths) {
+          await handleFileDrop(event.payload.paths);
+        }
+      });
+
+      // Listen to drag leave event (when drag leaves without dropping)
+      const unlistenLeave = await listen("tauri://drag-leave", () => {
+        console.log("Drag leave - hiding overlay");
+        setIsDraggingOver(false);
+      });
+
+      console.log("Listening to drag events");
+
+      // Chain all unlisteners
+      unlisten = () => {
+        unlistenHover();
+        unlistenDrop();
+        unlistenLeave();
+      };
+    };
+
+    setupFileDropListener();
+
+    return () => {
+      if (unlisten) {
+        unlisten();
+      }
+    };
   }, []);
 
   const checkToolsStatus = async () => {
@@ -515,7 +629,46 @@ function App() {
   }
 
   return (
-    <div className="h-screen bg-off-white flex flex-col overflow-hidden">
+    <div className="h-screen bg-off-white flex flex-col overflow-hidden relative">
+      {/* Drag Overlay - Shows when dragging files over window */}
+      {isDraggingOver && (
+        <div className="absolute inset-0 z-[100] bg-aquamarine bg-opacity-20 border-4 border-dashed border-aquamarine flex items-center justify-center pointer-events-none">
+          <div className="bg-white rounded-2xl p-8 shadow-2xl">
+            <div className="flex flex-col items-center space-y-4">
+              <div className="w-20 h-20 bg-aquamarine rounded-full flex items-center justify-center animate-bounce">
+                <svg
+                  width="48"
+                  height="48"
+                  viewBox="0 0 48 48"
+                  fill="none"
+                  className="text-dark-purple"
+                >
+                  <path
+                    d="M24 8v24M24 32l-8-8M24 32l8-8"
+                    stroke="currentColor"
+                    strokeWidth="3"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                  <path
+                    d="M10 40h28"
+                    stroke="currentColor"
+                    strokeWidth="3"
+                    strokeLinecap="round"
+                  />
+                </svg>
+              </div>
+              <h2 className="text-2xl font-bold text-dark-purple">
+                Drop files here
+              </h2>
+              <p className="text-light-purple">
+                Release to add files for conversion
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Custom Title Bar */}
       <div
         className="bg-aquamarine px-4 py-2 flex items-center justify-between select-none flex-shrink-0 z-50"
