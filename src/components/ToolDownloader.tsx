@@ -1,7 +1,6 @@
 import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { getCurrentWindow } from "@tauri-apps/api/window";
 import { Download, Check, X, Loader } from "lucide-react";
 
 interface ToolStatus {
@@ -39,19 +38,8 @@ export default function ToolDownloader({
     useState<DownloadProgress | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
-  const [currentPlatform, setCurrentPlatform] = useState<string>("windows");
 
   useEffect(() => {
-    // Detect platform
-    const userAgent = navigator.userAgent.toLowerCase();
-    if (userAgent.includes("mac")) {
-      setCurrentPlatform("macos");
-    } else if (userAgent.includes("linux")) {
-      setCurrentPlatform("linux");
-    } else {
-      setCurrentPlatform("windows");
-    }
-
     checkToolsStatus();
 
     const unlisten = listen<DownloadProgress>("download-progress", (event) => {
@@ -147,190 +135,21 @@ export default function ToolDownloader({
     toolStatus.ffmpeg.available && toolStatus.pandoc.available;
   const allToolsReady = coreToolsReady && toolStatus.imagemagick.available;
 
-  const handleMinimize = async () => {
-    const window = getCurrentWindow();
-    await window.minimize();
-  };
-
-  const handleMaximize = async () => {
-    const window = getCurrentWindow();
-    await window.toggleMaximize();
-  };
-
-  const handleClose = async () => {
-    const window = getCurrentWindow();
-    await window.close();
-  };
-
-  // Platform-specific window control components
-  const MacOSControls = () => (
-    <div className="flex items-center space-x-2">
-      <button
-        onClick={handleClose}
-        className="w-3 h-3 bg-pink rounded-full hover:bg-red-500 transition-colors focus:outline-none"
-        aria-label="Close"
-      ></button>
-      <button
-        onClick={handleMinimize}
-        className="w-3 h-3 bg-yellow rounded-full hover:bg-yellow-400 transition-colors focus:outline-none"
-        aria-label="Minimize"
-      ></button>
-      <button
-        onClick={handleMaximize}
-        className="w-3 h-3 bg-aquamarine rounded-full border border-dark-purple hover:bg-green-400 transition-colors focus:outline-none"
-        aria-label="Maximize"
-      ></button>
-    </div>
-  );
-
-  const WindowsControls = () => (
-    <div className="flex items-center">
-      <button
-        onClick={handleMinimize}
-        className="w-12 h-8 hover:bg-dark-purple hover:bg-opacity-10 flex items-center justify-center transition-colors focus:outline-none"
-        aria-label="Minimize"
-      >
-        <svg
-          width="10"
-          height="1"
-          viewBox="0 0 10 1"
-          fill="currentColor"
-          className="text-dark-purple"
-        >
-          <rect width="10" height="1" />
-        </svg>
-      </button>
-      <button
-        onClick={handleMaximize}
-        className="w-12 h-8 hover:bg-dark-purple hover:bg-opacity-10 flex items-center justify-center transition-colors focus:outline-none"
-        aria-label="Maximize"
-      >
-        <svg
-          width="10"
-          height="10"
-          viewBox="0 0 10 10"
-          fill="none"
-          className="text-dark-purple"
-        >
-          <rect
-            x="0"
-            y="0"
-            width="10"
-            height="10"
-            stroke="currentColor"
-            strokeWidth="1"
-            fill="none"
-          />
-        </svg>
-      </button>
-      <button
-        onClick={handleClose}
-        className="w-12 h-8 hover:bg-red-500 hover:text-white flex items-center justify-center transition-colors focus:outline-none"
-        aria-label="Close"
-      >
-        <svg
-          width="10"
-          height="10"
-          viewBox="0 0 10 10"
-          fill="none"
-          className="stroke-current"
-        >
-          <path d="M1 1L9 9M9 1L1 9" stroke="currentColor" strokeWidth="1" />
-        </svg>
-      </button>
-    </div>
-  );
-
-  const LinuxControls = () => (
-    <div className="flex items-center">
-      <button
-        onClick={handleMinimize}
-        className="w-8 h-8 hover:bg-dark-purple hover:bg-opacity-10 flex items-center justify-center transition-colors focus:outline-none"
-        aria-label="Minimize"
-      >
-        <svg
-          width="12"
-          height="2"
-          viewBox="0 0 12 2"
-          fill="currentColor"
-          className="text-dark-purple"
-        >
-          <rect width="12" height="2" />
-        </svg>
-      </button>
-      <button
-        onClick={handleMaximize}
-        className="w-8 h-8 hover:bg-dark-purple hover:bg-opacity-10 flex items-center justify-center transition-colors focus:outline-none"
-        aria-label="Maximize"
-      >
-        <svg
-          width="12"
-          height="12"
-          viewBox="0 0 12 12"
-          fill="none"
-          className="text-dark-purple"
-        >
-          <rect
-            x="1"
-            y="1"
-            width="10"
-            height="10"
-            stroke="currentColor"
-            strokeWidth="1.5"
-            fill="none"
-          />
-        </svg>
-      </button>
-      <button
-        onClick={handleClose}
-        className="w-8 h-8 hover:bg-red-500 hover:text-white flex items-center justify-center transition-colors focus:outline-none"
-        aria-label="Close"
-      >
-        <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-          <path
-            d="M2 2L10 10M10 2L2 10"
-            stroke="currentColor"
-            strokeWidth="1.5"
-          />
-        </svg>
-      </button>
-    </div>
-  );
-
   return (
-    <div className="h-screen bg-off-white flex flex-col overflow-hidden">
-      {/* Custom Title Bar */}
-      <div
-        className="bg-aquamarine px-4 py-2 flex items-center justify-between select-none flex-shrink-0 z-50"
-        data-tauri-drag-region
+    <div className="h-screen bg-off-white flex flex-col overflow-hidden relative">
+      {/* Close Button */}
+      <button
+        onClick={onAllToolsReady}
+        className="absolute top-6 right-6 z-50 w-10 h-10 bg-white hover:bg-pink rounded-lg flex items-center justify-center transition-colors shadow-lg border-2 border-dark-purple"
+        aria-label="Close Tools Manager"
+        title="Back to main app"
       >
-        {/* Left side - Controls on macOS, Title on Windows/Linux */}
-        <div className="flex items-center space-x-4">
-          {currentPlatform === "macos" && <MacOSControls />}
-          {currentPlatform !== "macos" && (
-            <div className="text-dark-purple font-bold text-sm">
-              ConvertSave - Tools Manager
-            </div>
-          )}
-        </div>
-
-        {/* Center - Title on macOS */}
-        {currentPlatform === "macos" && (
-          <div className="text-dark-purple font-bold text-sm">
-            ConvertSave - Tools Manager
-          </div>
-        )}
-
-        {/* Right side - Controls on Windows/Linux */}
-        <div className="flex items-center space-x-2">
-          {currentPlatform === "windows" && <WindowsControls />}
-          {currentPlatform === "linux" && <LinuxControls />}
-        </div>
-      </div>
+        <X className="w-6 h-6 text-dark-purple" />
+      </button>
 
       {/* Main Content Area */}
       <div className="flex-1 overflow-y-auto overflow-x-hidden">
-        <div className="p-6 flex items-center justify-center min-h-full">
+        <div className="p-6 flex items-center justify-center min-h-full pt-20">
           <div className="max-w-2xl w-full space-y-6">
             {/* Header */}
             <div className="text-center space-y-2">
