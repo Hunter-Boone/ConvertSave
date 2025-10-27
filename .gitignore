@@ -28,3 +28,4 @@ src-tauri/target
 src-tauri/WixTools
 
 tools/*
+target/rust-analyzer/*

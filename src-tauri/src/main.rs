@@ -949,6 +949,15 @@ async fn execute_conversion(
             
             // Format-specific quality and options
             match output_ext.as_str() {
+                // ICO format requires special handling - must be resized to fit icon size limits
+                "ico" => {
+                    // ICO files have size limitations (typically max 256x256)
+                    // Resize to 256x256 maintaining aspect ratio, then use extent to make it square
+                    command.arg("-resize").arg("256x256");
+                    command.arg("-gravity").arg("center");
+                    command.arg("-extent").arg("256x256");
+                    command.arg("-background").arg("transparent");
+                }
                 // Modern compressed formats
                 "heic" | "heif" => {
                     command.arg("-quality").arg("85");

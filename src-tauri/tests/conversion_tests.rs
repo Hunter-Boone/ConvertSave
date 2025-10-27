@@ -1,5 +1,104 @@
 use std::path::PathBuf;
 use std::fs;
+use dirs;
+
+// Helper function to get the tool path (same logic as main.rs)
+fn get_tool_path(tool_name: &str) -> Result<PathBuf, String> {
+    let platform_name = if cfg!(target_os = "windows") {
+        "windows"
+    } else if cfg!(target_os = "macos") {
+        "macos"
+    } else {
+        "linux"
+    };
+    
+    let exe_name = match tool_name {
+        "ffmpeg" => {
+            if cfg!(target_os = "windows") {
+                "ffmpeg.exe"
+            } else {
+                "ffmpeg"
+            }
+        }
+        "pandoc" => {
+            if cfg!(target_os = "windows") {
+                "pandoc.exe"
+            } else {
+                "pandoc"
+            }
+        }
+        "imagemagick" => {
+            if cfg!(target_os = "windows") {
+                "magick.exe"
+            } else {
+                "magick"
+            }
+        }
+        _ => return Err(format!("Unknown tool: {}", tool_name)),
+    };
+    
+    // Try multiple possible locations
+    let mut possible_paths = vec![];
+    
+    // 1. App data directory (downloaded binaries) - CHECK THIS FIRST
+    // NOTE: This must match the path used in the main application
+    if let Some(data_dir) = dirs::data_dir() {
+        // Tauri's app_data_dir() uses: {data_dir}/{identifier}
+        // Our identifier from tauri.conf.json is "com.convertsave.app"
+        let app_data_path = data_dir
+            .join("com.convertsave.app")
+            .join(tool_name)
+            .join(exe_name);
+        possible_paths.push(app_data_path);
+    }
+    
+    // 2. Project root tools directory (development)
+    if let Ok(current) = std::env::current_dir() {
+        possible_paths.push(current.join("tools").join(platform_name).join(exe_name));
+    }
+    
+    // 3. Relative to executable (production)
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(parent) = exe.parent() {
+            possible_paths.push(parent.join("tools").join(platform_name).join(exe_name));
+        }
+    }
+    
+    // 4. Parent directory of executable + tools (alternative production layout)
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(parent) = exe.parent().and_then(|p| p.parent()) {
+            possible_paths.push(parent.join("tools").join(platform_name).join(exe_name));
+        }
+    }
+    
+    // 5. Check if we're in src-tauri directory during development
+    if let Ok(current) = std::env::current_dir() {
+        if let Some(parent) = current.parent() {
+            possible_paths.push(parent.join("tools").join(platform_name).join(exe_name));
+        }
+    }
+    
+    // Debug: print all paths we're checking
+    println!("=== CHECKING TOOL PATHS for {} ===", tool_name);
+    for path in &possible_paths {
+        println!("  Checking: {:?} (exists: {})", path, path.exists());
+    }
+    
+    // Find the first path that exists
+    for path in &possible_paths {
+        if path.exists() {
+            println!("  ✓ Using: {:?}", path);
+            return Ok(path.clone());
+        }
+    }
+    
+    // If none found, list all the paths we checked
+    let checked_paths: Vec<String> = possible_paths.iter()
+        .map(|p| p.display().to_string())
+        .collect();
+    
+    Err(format!("Tool not found: {} (checked: {})", tool_name, checked_paths.join(", ")))
+}
 
 // Helper function to get test fixtures path
 fn get_fixtures_dir() -> PathBuf {
@@ -51,9 +150,12 @@ async fn perform_conversion(
     // Determine the tool and execute conversion
     // This is a simplified version - you may want to import the actual functions
     let tool = match (&input_extension[..], output_format) {
+        // ICO format - use ImageMagick (needs resize handling)
+        (ext, "ico") if matches!(ext, "png" | "jpg" | "jpeg" | "bmp" | "tiff" | "webp" | "gif" | "heic" | "heif" | "avif") => "imagemagick",
+        
         // Images - use FFmpeg
         (ext, "jpg") | (ext, "png") | (ext, "webp") | (ext, "gif") | 
-        (ext, "bmp") | (ext, "tiff") | (ext, "avif") | (ext, "ico") |
+        (ext, "bmp") | (ext, "tiff") | (ext, "avif") |
         (ext, "tga") | (ext, "j2k") | (ext, "exr") | (ext, "hdr")
             if matches!(ext, "png" | "jpg" | "jpeg" | "bmp" | "tiff" | "webp" | "gif" | "heic" | "heif" | "avif") => "ffmpeg",
         
@@ -81,12 +183,17 @@ async fn perform_conversion(
 }
 
 async fn execute_ffmpeg_conversion(input: &PathBuf, output: &PathBuf, format: &str) -> Result<(), String> {
-    let mut cmd = std::process::Command::new("ffmpeg");
+    let ffmpeg_path = get_tool_path("ffmpeg")?;
+    let mut cmd = std::process::Command::new(&ffmpeg_path);
     cmd.arg("-i").arg(input);
     cmd.arg("-y"); // Overwrite output files
     
     // Add format-specific arguments
     match format {
+        "ico" => {
+            // ICO format has a maximum size of 256x256, so we need to scale down
+            cmd.arg("-vf").arg("scale='min(256,iw)':'min(256,ih)':force_original_aspect_ratio=decrease");
+        }
         "jpg" | "jpeg" => {
             cmd.arg("-q:v").arg("2"); // High quality
         }
@@ -122,13 +229,23 @@ async fn execute_ffmpeg_conversion(input: &PathBuf, output: &PathBuf, format: &s
     Ok(())
 }
 
-async fn execute_imagemagick_conversion(input: &PathBuf, output: &PathBuf, _format: &str) -> Result<(), String> {
-    let cmd_name = if cfg!(target_os = "windows") { "magick" } else { "convert" };
+async fn execute_imagemagick_conversion(input: &PathBuf, output: &PathBuf, format: &str) -> Result<(), String> {
+    let imagemagick_path = get_tool_path("imagemagick")?;
     
-    let output_result = std::process::Command::new(cmd_name)
-        .arg(input)
-        .arg(output)
-        .output()
+    let mut cmd = std::process::Command::new(&imagemagick_path);
+    cmd.arg(input);
+    
+    // Special handling for ICO format - must resize to fit icon size limits
+    if format == "ico" {
+        cmd.arg("-resize").arg("256x256");
+        cmd.arg("-gravity").arg("center");
+        cmd.arg("-extent").arg("256x256");
+        cmd.arg("-background").arg("transparent");
+    }
+    
+    cmd.arg(output);
+    
+    let output_result = cmd.output()
         .map_err(|e| format!("Failed to execute ImageMagick: {}", e))?;
     
     if !output_result.status.success() {
@@ -140,7 +257,8 @@ async fn execute_imagemagick_conversion(input: &PathBuf, output: &PathBuf, _form
 }
 
 async fn execute_pandoc_conversion(input: &PathBuf, output: &PathBuf, format: &str) -> Result<(), String> {
-    let mut cmd = std::process::Command::new("pandoc");
+    let pandoc_path = get_tool_path("pandoc")?;
+    let mut cmd = std::process::Command::new(&pandoc_path);
     cmd.arg(input);
     cmd.arg("-o").arg(output);
     

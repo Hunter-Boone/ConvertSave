@@ -30,6 +30,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Removed bundled FFmpeg and Pandoc binaries (GPL compliance)
 - Application size reduced from ~100MB+ to ~5-10MB
 
+### Fixed
+
+- ICO conversion now automatically resizes large images to 256x256 pixels to fit icon format limitations
+- Prevented "width or height exceeds limit" errors when converting photos to ICO format
+
 ### Security
 
 - Added HTTP permissions for downloading from official sources only
