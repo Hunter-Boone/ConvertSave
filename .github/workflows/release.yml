@@ -111,13 +111,50 @@ jobs:
         run: |
           mkdir -p ./release-assets
 
-          # Copy only installer files (excluding .app to save space)
-          find linux-build -name "*.deb" -exec cp {} ./release-assets/ \; 2>/dev/null || true
-          find linux-build -name "*.rpm" -exec cp {} ./release-assets/ \; 2>/dev/null || true
-          find linux-build -name "*.AppImage" -exec cp {} ./release-assets/ \; 2>/dev/null || true
-          find macos-build -name "*.dmg" -exec cp {} ./release-assets/ \; 2>/dev/null || true
-          find windows-build -name "*.msi" -exec cp {} ./release-assets/ \; 2>/dev/null || true
-          find windows-build -name "*.exe" -exec cp {} ./release-assets/ \; 2>/dev/null || true
+          # Linux files - add Linux to filename
+          for file in linux-build/*.deb; do
+            if [ -f "$file" ]; then
+              filename=$(basename "$file")
+              cp "$file" "./release-assets/${filename%.deb}-linux.deb"
+            fi
+          done 2>/dev/null || true
+
+          for file in linux-build/*.rpm; do
+            if [ -f "$file" ]; then
+              filename=$(basename "$file")
+              cp "$file" "./release-assets/${filename%.rpm}-linux.rpm"
+            fi
+          done 2>/dev/null || true
+
+          for file in linux-build/*.AppImage; do
+            if [ -f "$file" ]; then
+              filename=$(basename "$file")
+              cp "$file" "./release-assets/${filename%.AppImage}-linux.AppImage"
+            fi
+          done 2>/dev/null || true
+
+          # macOS files - add macOS to filename
+          for file in macos-build/*.dmg; do
+            if [ -f "$file" ]; then
+              filename=$(basename "$file")
+              cp "$file" "./release-assets/${filename%.dmg}-macos.dmg"
+            fi
+          done 2>/dev/null || true
+
+          # Windows files - add Windows to filename
+          for file in windows-build/*.msi; do
+            if [ -f "$file" ]; then
+              filename=$(basename "$file")
+              cp "$file" "./release-assets/${filename%.msi}-windows.msi"
+            fi
+          done 2>/dev/null || true
+
+          for file in windows-build/*.exe; do
+            if [ -f "$file" ]; then
+              filename=$(basename "$file")
+              cp "$file" "./release-assets/${filename%.exe}-windows.exe"
+            fi
+          done 2>/dev/null || true
 
           # Remove original artifact directories to prevent double upload
           rm -rf linux-build macos-build windows-build

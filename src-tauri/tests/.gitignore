@@ -1,0 +1,9 @@
+# Test output files
+output/
+
+# Large test fixtures (optional - comment out if you want to commit them)
+# fixtures/video/*.mp4
+# fixtures/video/*.avi
+# fixtures/video/*.mov
+# fixtures/images/large_4k.png
+
