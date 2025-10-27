@@ -1357,6 +1357,39 @@ async fn test_tool(tool_name: String) -> Result<String, String> {
 }
 
 #[tauri::command]
+async fn get_thumbnail(file_path: String) -> Result<String, String> {
+    let path = PathBuf::from(&file_path);
+    
+    // Read the file
+    let data = std::fs::read(&path)
+        .map_err(|e| format!("Failed to read image file: {}", e))?;
+    
+    // Get the file extension to determine MIME type
+    let extension = path.extension()
+        .and_then(|ext| ext.to_str())
+        .unwrap_or("")
+        .to_lowercase();
+    
+    let mime_type = match extension.as_str() {
+        "jpg" | "jpeg" => "image/jpeg",
+        "png" => "image/png",
+        "gif" => "image/gif",
+        "webp" => "image/webp",
+        "bmp" => "image/bmp",
+        "svg" => "image/svg+xml",
+        "ico" => "image/x-icon",
+        "tiff" | "tif" => "image/tiff",
+        _ => "image/jpeg", // default
+    };
+    
+    // Convert to base64
+    let base64_data = base64::Engine::encode(&base64::engine::general_purpose::STANDARD, &data);
+    
+    // Return as data URL
+    Ok(format!("data:{};base64,{}", mime_type, base64_data))
+}
+
+#[tauri::command]
 async fn check_tools_status() -> Result<serde_json::Value, String> {
     let mut status = serde_json::Map::new();
     
@@ -1735,6 +1768,7 @@ pub fn run() {
             get_available_formats,
             convert_file,
             get_file_info,
+            get_thumbnail,
             test_directories,
             open_folder,
             download_ffmpeg,
