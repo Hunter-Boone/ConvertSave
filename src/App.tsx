@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { getCurrentWindow } from "@tauri-apps/api/window";
+// import { getCurrentWindow } from "@tauri-apps/api/window"; // Uncomment for custom title bar
 import { listen } from "@tauri-apps/api/event";
 import { open } from "@tauri-apps/plugin-dialog";
 import FileConversionRow from "./components/FileConversionRow";
@@ -39,7 +39,7 @@ function App() {
     message: string;
     outputPath?: string;
   } | null>(null);
-  const [currentPlatform, setCurrentPlatform] = useState<string>("windows");
+  // const [currentPlatform, setCurrentPlatform] = useState<string>("windows"); // Uncomment for custom title bar
   const [isIndividualSettingsExpanded, setIsIndividualSettingsExpanded] =
     useState(false);
   const [toolsReady, setToolsReady] = useState<boolean | null>(null);
@@ -48,15 +48,17 @@ function App() {
   const isProcessingDrop = useRef(false);
 
   useEffect(() => {
-    // Detect platform using user agent as a fallback
-    const userAgent = navigator.userAgent.toLowerCase();
-    if (userAgent.includes("mac")) {
-      setCurrentPlatform("macos");
-    } else if (userAgent.includes("linux")) {
-      setCurrentPlatform("linux");
-    } else {
-      setCurrentPlatform("windows");
-    }
+    // ========== PLATFORM DETECTION (COMMENTED OUT FOR NATIVE DECORATIONS) ==========
+    // Uncomment this code if you restore the custom title bar
+    // const userAgent = navigator.userAgent.toLowerCase();
+    // if (userAgent.includes("mac")) {
+    //   setCurrentPlatform("macos");
+    // } else if (userAgent.includes("linux")) {
+    //   setCurrentPlatform("linux");
+    // } else {
+    //   setCurrentPlatform("windows");
+    // }
+    // ========== END PLATFORM DETECTION ==========
 
     // Check if tools are ready
     checkToolsStatus();
@@ -318,20 +320,24 @@ function App() {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + " " + sizes[i];
   };
 
-  const handleMinimize = async () => {
-    const window = getCurrentWindow();
-    await window.minimize();
-  };
+  // ========== CUSTOM TITLE BAR CODE (COMMENTED OUT FOR NATIVE DECORATIONS) ==========
+  // Uncomment these functions and the title bar JSX below to restore custom window controls
 
-  const handleMaximize = async () => {
-    const window = getCurrentWindow();
-    await window.toggleMaximize();
-  };
+  // const handleMinimize = async () => {
+  //   const window = getCurrentWindow();
+  //   await window.minimize();
+  // };
 
-  const handleClose = async () => {
-    const window = getCurrentWindow();
-    await window.close();
-  };
+  // const handleMaximize = async () => {
+  //   const window = getCurrentWindow();
+  //   await window.toggleMaximize();
+  // };
+
+  // const handleClose = async () => {
+  //   const window = getCurrentWindow();
+  //   await window.close();
+  // };
+  // ========== END CUSTOM TITLE BAR CODE ==========
 
   const handleBrowseFiles = async () => {
     try {
@@ -476,140 +482,144 @@ function App() {
     }
   };
 
+  // ========== CUSTOM TITLE BAR COMPONENTS (COMMENTED OUT FOR NATIVE DECORATIONS) ==========
+  // Uncomment these components to restore platform-specific custom window controls
+
   // Platform-specific window control components
-  const MacOSControls = () => (
-    <div className="flex items-center space-x-2">
-      <button
-        onClick={handleClose}
-        className="w-3 h-3 bg-pink rounded-full hover:bg-red-500 transition-colors focus:outline-none"
-        aria-label="Close"
-      ></button>
-      <button
-        onClick={handleMinimize}
-        className="w-3 h-3 bg-yellow rounded-full hover:bg-yellow-400 transition-colors focus:outline-none"
-        aria-label="Minimize"
-      ></button>
-      <button
-        onClick={handleMaximize}
-        className="w-3 h-3 bg-aquamarine rounded-full border border-dark-purple hover:bg-green-400 transition-colors focus:outline-none"
-        aria-label="Maximize"
-      ></button>
-    </div>
-  );
+  // const MacOSControls = () => (
+  //   <div className="flex items-center space-x-2">
+  //     <button
+  //       onClick={handleClose}
+  //       className="w-3 h-3 bg-pink rounded-full hover:bg-red-500 transition-colors focus:outline-none"
+  //       aria-label="Close"
+  //     ></button>
+  //     <button
+  //       onClick={handleMinimize}
+  //       className="w-3 h-3 bg-yellow rounded-full hover:bg-yellow-400 transition-colors focus:outline-none"
+  //       aria-label="Minimize"
+  //     ></button>
+  //     <button
+  //       onClick={handleMaximize}
+  //       className="w-3 h-3 bg-aquamarine rounded-full border border-dark-purple hover:bg-green-400 transition-colors focus:outline-none"
+  //       aria-label="Maximize"
+  //     ></button>
+  //   </div>
+  // );
 
-  const WindowsControls = () => (
-    <div className="flex items-center">
-      <button
-        onClick={handleMinimize}
-        className="w-12 h-8 hover:bg-dark-purple hover:bg-opacity-10 flex items-center justify-center transition-colors focus:outline-none"
-        aria-label="Minimize"
-      >
-        <svg
-          width="10"
-          height="1"
-          viewBox="0 0 10 1"
-          fill="currentColor"
-          className="text-dark-purple"
-        >
-          <rect width="10" height="1" />
-        </svg>
-      </button>
-      <button
-        onClick={handleMaximize}
-        className="w-12 h-8 hover:bg-dark-purple hover:bg-opacity-10 flex items-center justify-center transition-colors focus:outline-none"
-        aria-label="Maximize"
-      >
-        <svg
-          width="10"
-          height="10"
-          viewBox="0 0 10 10"
-          fill="none"
-          className="text-dark-purple"
-        >
-          <rect
-            x="0"
-            y="0"
-            width="10"
-            height="10"
-            stroke="currentColor"
-            strokeWidth="1"
-            fill="none"
-          />
-        </svg>
-      </button>
-      <button
-        onClick={handleClose}
-        className="w-12 h-8 hover:bg-red-500 hover:text-white flex items-center justify-center transition-colors focus:outline-none"
-        aria-label="Close"
-      >
-        <svg
-          width="10"
-          height="10"
-          viewBox="0 0 10 10"
-          fill="none"
-          className="stroke-current"
-        >
-          <path d="M1 1L9 9M9 1L1 9" stroke="currentColor" strokeWidth="1" />
-        </svg>
-      </button>
-    </div>
-  );
+  // const WindowsControls = () => (
+  //   <div className="flex items-center">
+  //     <button
+  //       onClick={handleMinimize}
+  //       className="w-12 h-8 hover:bg-dark-purple hover:bg-opacity-10 flex items-center justify-center transition-colors focus:outline-none"
+  //       aria-label="Minimize"
+  //     >
+  //       <svg
+  //         width="10"
+  //         height="1"
+  //         viewBox="0 0 10 1"
+  //         fill="currentColor"
+  //         className="text-dark-purple"
+  //       >
+  //         <rect width="10" height="1" />
+  //       </svg>
+  //     </button>
+  //     <button
+  //       onClick={handleMaximize}
+  //       className="w-12 h-8 hover:bg-dark-purple hover:bg-opacity-10 flex items-center justify-center transition-colors focus:outline-none"
+  //       aria-label="Maximize"
+  //     >
+  //       <svg
+  //         width="10"
+  //         height="10"
+  //         viewBox="0 0 10 10"
+  //         fill="none"
+  //         className="text-dark-purple"
+  //       >
+  //         <rect
+  //           x="0"
+  //           y="0"
+  //           width="10"
+  //           height="10"
+  //           stroke="currentColor"
+  //           strokeWidth="1"
+  //           fill="none"
+  //         />
+  //       </svg>
+  //     </button>
+  //     <button
+  //       onClick={handleClose}
+  //       className="w-12 h-8 hover:bg-red-500 hover:text-white flex items-center justify-center transition-colors focus:outline-none"
+  //       aria-label="Close"
+  //     >
+  //       <svg
+  //         width="10"
+  //         height="10"
+  //         viewBox="0 0 10 10"
+  //         fill="none"
+  //         className="stroke-current"
+  //       >
+  //         <path d="M1 1L9 9M9 1L1 9" stroke="currentColor" strokeWidth="1" />
+  //       </svg>
+  //     </button>
+  //   </div>
+  // );
 
-  const LinuxControls = () => (
-    <div className="flex items-center">
-      <button
-        onClick={handleMinimize}
-        className="w-8 h-8 hover:bg-dark-purple hover:bg-opacity-10 flex items-center justify-center transition-colors focus:outline-none"
-        aria-label="Minimize"
-      >
-        <svg
-          width="12"
-          height="2"
-          viewBox="0 0 12 2"
-          fill="currentColor"
-          className="text-dark-purple"
-        >
-          <rect width="12" height="2" />
-        </svg>
-      </button>
-      <button
-        onClick={handleMaximize}
-        className="w-8 h-8 hover:bg-dark-purple hover:bg-opacity-10 flex items-center justify-center transition-colors focus:outline-none"
-        aria-label="Maximize"
-      >
-        <svg
-          width="12"
-          height="12"
-          viewBox="0 0 12 12"
-          fill="none"
-          className="text-dark-purple"
-        >
-          <rect
-            x="1"
-            y="1"
-            width="10"
-            height="10"
-            stroke="currentColor"
-            strokeWidth="1.5"
-            fill="none"
-          />
-        </svg>
-      </button>
-      <button
-        onClick={handleClose}
-        className="w-8 h-8 hover:bg-red-500 hover:text-white flex items-center justify-center transition-colors focus:outline-none"
-        aria-label="Close"
-      >
-        <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-          <path
-            d="M2 2L10 10M10 2L2 10"
-            stroke="currentColor"
-            strokeWidth="1.5"
-          />
-        </svg>
-      </button>
-    </div>
-  );
+  // const LinuxControls = () => (
+  //   <div className="flex items-center">
+  //     <button
+  //       onClick={handleMinimize}
+  //       className="w-8 h-8 hover:bg-dark-purple hover:bg-opacity-10 flex items-center justify-center transition-colors focus:outline-none"
+  //       aria-label="Minimize"
+  //     >
+  //       <svg
+  //         width="12"
+  //         height="2"
+  //         viewBox="0 0 12 2"
+  //         fill="currentColor"
+  //         className="text-dark-purple"
+  //       >
+  //         <rect width="12" height="2" />
+  //       </svg>
+  //     </button>
+  //     <button
+  //       onClick={handleMaximize}
+  //       className="w-8 h-8 hover:bg-dark-purple hover:bg-opacity-10 flex items-center justify-center transition-colors focus:outline-none"
+  //       aria-label="Maximize"
+  //     >
+  //       <svg
+  //         width="12"
+  //         height="12"
+  //         viewBox="0 0 12 12"
+  //         fill="none"
+  //         className="text-dark-purple"
+  //       >
+  //         <rect
+  //           x="1"
+  //           y="1"
+  //           width="10"
+  //           height="10"
+  //           stroke="currentColor"
+  //           strokeWidth="1.5"
+  //           fill="none"
+  //         />
+  //       </svg>
+  //     </button>
+  //     <button
+  //       onClick={handleClose}
+  //       className="w-8 h-8 hover:bg-red-500 hover:text-white flex items-center justify-center transition-colors focus:outline-none"
+  //       aria-label="Close"
+  //     >
+  //       <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+  //         <path
+  //           d="M2 2L10 10M10 2L2 10"
+  //           stroke="currentColor"
+  //           strokeWidth="1.5"
+  //         />
+  //       </svg>
+  //     </button>
+  //   </div>
+  // );
+  // ========== END CUSTOM TITLE BAR COMPONENTS ==========
 
   // Show tool downloader if tools aren't ready OR if user manually opens tool manager
   if (toolsReady === false || showToolManager) {
@@ -669,12 +679,13 @@ function App() {
         </div>
       )}
 
-      {/* Custom Title Bar */}
+      {/* ========== CUSTOM TITLE BAR (COMMENTED OUT FOR NATIVE DECORATIONS) ========== */}
+      {/* Uncomment this entire section to restore the custom title bar with colored controls */}
+      {/*
       <div
         className="bg-aquamarine px-4 py-2 flex items-center justify-between select-none flex-shrink-0 z-50"
         data-tauri-drag-region
       >
-        {/* Left side - Controls on macOS, Title on Windows/Linux */}
         <div className="flex items-center space-x-4">
           {currentPlatform === "macos" && <MacOSControls />}
           {currentPlatform !== "macos" && (
@@ -684,12 +695,10 @@ function App() {
           )}
         </div>
 
-        {/* Center - Title on macOS */}
         {currentPlatform === "macos" && (
           <div className="text-dark-purple font-bold text-sm">ConvertSave</div>
         )}
 
-        {/* Right side - Tools Manager, Update button, Controls on Windows/Linux */}
         <div className="flex items-center space-x-2">
           <button
             onClick={() => setShowToolManager(true)}
@@ -710,14 +719,22 @@ function App() {
           {currentPlatform === "linux" && <LinuxControls />}
         </div>
       </div>
+      */}
+      {/* ========== END CUSTOM TITLE BAR ========== */}
 
       {/* Main Content Area */}
       <div className="flex-1 overflow-y-auto overflow-x-hidden">
-        <div className="p-6 space-y-6">
+        <div
+          className={`${
+            selectedFiles.length === 0
+              ? "h-full flex flex-col p-6"
+              : "p-6 space-y-6"
+          }`}
+        >
           {/* Show drag zone when no files are selected, or a smaller version when files are present */}
           {selectedFiles.length === 0 ? (
             /* Main Drop Zone - Full Size */
-            <div className="border-2 border-dashed border-light-purple rounded-xl p-16 text-center bg-white">
+            <div className="flex-1 border-2 border-dashed border-light-purple rounded-xl p-16 text-center bg-white flex items-center justify-center">
               <div className="space-y-6">
                 <div className="w-20 h-20 mx-auto bg-light-grey rounded-lg flex items-center justify-center">
                   <svg
