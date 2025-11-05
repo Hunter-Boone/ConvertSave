@@ -1133,11 +1133,14 @@ async fn download_ffmpeg(app: AppHandle) -> Result<String, String> {
     let data_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
     std::fs::create_dir_all(&data_dir).map_err(|e| e.to_string())?;
     
-    let (download_url, filename, is_zip) = get_ffmpeg_download_info()?;
-    let ffmpeg_path = data_dir.join("ffmpeg").join(if cfg!(windows) { "ffmpeg.exe" } else { "ffmpeg" });
+    let (download_url, filename, is_zip) = get_ffmpeg_download_info().await?;
+    let ffmpeg_dir = data_dir.join("ffmpeg");
+    let ffmpeg_path = ffmpeg_dir.join(if cfg!(windows) { "ffmpeg.exe" } else { "ffmpeg" });
     
-    if ffmpeg_path.exists() {
-        return Ok("FFmpeg already downloaded".to_string());
+    // If FFmpeg already exists, remove it to allow updating
+    if ffmpeg_dir.exists() {
+        println!("Removing existing FFmpeg installation for update...");
+        std::fs::remove_dir_all(&ffmpeg_dir).map_err(|e| format!("Failed to remove old FFmpeg: {}", e))?;
     }
     
     app.emit("download-progress", DownloadProgress {
@@ -1185,11 +1188,14 @@ async fn download_pandoc(app: AppHandle) -> Result<String, String> {
     let data_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
     std::fs::create_dir_all(&data_dir).map_err(|e| e.to_string())?;
     
-    let (download_url, filename, is_zip) = get_pandoc_download_info()?;
-    let pandoc_path = data_dir.join("pandoc").join(if cfg!(windows) { "pandoc.exe" } else { "pandoc" });
+    let (download_url, filename, is_zip) = get_pandoc_download_info().await?;
+    let pandoc_dir = data_dir.join("pandoc");
+    let pandoc_path = pandoc_dir.join(if cfg!(windows) { "pandoc.exe" } else { "pandoc" });
     
-    if pandoc_path.exists() {
-        return Ok("Pandoc already downloaded".to_string());
+    // If Pandoc already exists, remove it to allow updating
+    if pandoc_dir.exists() {
+        println!("Removing existing Pandoc installation for update...");
+        std::fs::remove_dir_all(&pandoc_dir).map_err(|e| format!("Failed to remove old Pandoc: {}", e))?;
     }
     
     app.emit("download-progress", DownloadProgress {
@@ -1245,11 +1251,13 @@ async fn download_imagemagick(app: AppHandle) -> Result<String, String> {
     println!("Is 7z: {}", is_sevenz);
     
     let magick_exe = if cfg!(windows) { "magick.exe" } else { "magick" };
-    let magick_path = data_dir.join("imagemagick").join(magick_exe);
+    let imagemagick_dir = data_dir.join("imagemagick");
+    let magick_path = imagemagick_dir.join(magick_exe);
     
-    if magick_path.exists() {
-        println!("ImageMagick already exists at: {}", magick_path.display());
-        return Ok("ImageMagick already downloaded".to_string());
+    // If ImageMagick already exists, remove it to allow updating
+    if imagemagick_dir.exists() {
+        println!("Removing existing ImageMagick installation for update...");
+        std::fs::remove_dir_all(&imagemagick_dir).map_err(|e| format!("Failed to remove old ImageMagick: {}", e))?;
     }
     
     app.emit("download-progress", DownloadProgress {
@@ -1523,7 +1531,208 @@ async fn check_tools_status() -> Result<serde_json::Value, String> {
     Ok(serde_json::Value::Object(status))
 }
 
-fn get_ffmpeg_download_info() -> Result<(String, String, bool), String> {
+#[tauri::command]
+async fn check_for_updates() -> Result<serde_json::Value, String> {
+    let mut updates = serde_json::Map::new();
+    
+    // Check FFmpeg
+    let ffmpeg_update = match get_tool_path("ffmpeg") {
+        Ok(path) => {
+            // Get current version
+            let output = create_command(&path)
+                .arg("-version")
+                .output()
+                .map_err(|e| e.to_string())?;
+            
+            let version_str = String::from_utf8_lossy(&output.stdout);
+            let current_version = version_str
+                .lines()
+                .next()
+                .and_then(|line| line.split_whitespace().nth(2))
+                .unwrap_or("unknown")
+                .to_string();
+            
+            // Try to get latest version from GitHub
+            let latest_result = fetch_latest_ffmpeg_version().await;
+            let (update_available, latest_version) = match latest_result {
+                Ok(latest_tag) => {
+                    // GitHub tag is like "autobuild-2024-11-06-12-55"
+                    // FFmpeg version output is like "N-121405-g469aad3897-20241009" or "n6.1-39-gde20d6085d"
+                    
+                    // Extract date from latest tag (format: autobuild-YYYY-MM-DD-HH-MM)
+                    let latest_date = if latest_tag.starts_with("autobuild-") {
+                        let parts: Vec<&str> = latest_tag.split('-').collect();
+                        if parts.len() >= 4 {
+                            // Combine YYYY-MM-DD into YYYYMMDD for comparison
+                            format!("{}{}{}", parts[1], parts[2], parts[3])
+                                .parse::<u32>().ok()
+                        } else {
+                            None
+                        }
+                    } else {
+                        None
+                    };
+                    
+                    // Try to extract date from current version
+                    // Format 1: "N-121405-g469aad3897-20241009" → last segment is YYYYMMDD
+                    // Format 2: "n6.1-39-gde20d6085d" → no date, always show as update available
+                    let current_date = current_version.split('-')
+                        .last()
+                        .and_then(|last_part| {
+                            // Check if it's 8 digits (YYYYMMDD format)
+                            if last_part.len() == 8 && last_part.chars().all(|c| c.is_numeric()) {
+                                last_part.parse::<u32>().ok()
+                            } else {
+                                None
+                            }
+                        });
+                    
+                    // Compare dates if both available, otherwise assume update is available
+                    let update_available = match (current_date, latest_date) {
+                        (Some(curr), Some(latest)) => latest > curr,
+                        (None, Some(_)) => true, // No date in current version, assume update available
+                        _ => false // Can't determine, don't show update
+                    };
+                    
+                    (update_available, Some(latest_tag))
+                }
+                Err(_) => (false, None)
+            };
+            
+            serde_json::json!({
+                "installed": true,
+                "currentVersion": current_version,
+                "updateAvailable": update_available,
+                "latestVersion": latest_version
+            })
+        }
+        Err(_) => {
+            serde_json::json!({
+                "installed": false,
+                "currentVersion": null,
+                "updateAvailable": false,
+                "latestVersion": null
+            })
+        }
+    };
+    updates.insert("ffmpeg".to_string(), ffmpeg_update);
+    
+    // Check Pandoc
+    let pandoc_update = match get_tool_path("pandoc") {
+        Ok(path) => {
+            let output = create_command(&path)
+                .arg("-version")
+                .output()
+                .map_err(|e| e.to_string())?;
+            
+            let version_str = String::from_utf8_lossy(&output.stdout);
+            let current_version = version_str
+                .lines()
+                .next()
+                .and_then(|line| line.split_whitespace().nth(1))
+                .unwrap_or("unknown")
+                .to_string();
+            
+            // Try to get latest version from GitHub
+            let latest_result = fetch_latest_pandoc_version().await;
+            let (update_available, latest_version) = match latest_result {
+                Ok(latest_tag) => {
+                    // GitHub tag is like "3.5" or "3.5.1", current_version is also like "3.5"
+                    // Remove 'v' prefix from tag if present
+                    let latest_clean = latest_tag.trim_start_matches('v').to_string();
+                    let update_available = current_version != "unknown" && 
+                                          current_version != latest_clean;
+                    (update_available, Some(latest_clean))
+                }
+                Err(_) => (false, None)
+            };
+            
+            serde_json::json!({
+                "installed": true,
+                "currentVersion": current_version,
+                "updateAvailable": update_available,
+                "latestVersion": latest_version
+            })
+        }
+        Err(_) => {
+            serde_json::json!({
+                "installed": false,
+                "currentVersion": null,
+                "updateAvailable": false,
+                "latestVersion": null
+            })
+        }
+    };
+    updates.insert("pandoc".to_string(), pandoc_update);
+    
+    // Check ImageMagick - with dynamic version checking
+    let imagemagick_update = match get_tool_path("imagemagick") {
+        Ok(path) => {
+            let output = create_command(&path)
+                .arg("-version")
+                .output()
+                .map_err(|e| e.to_string())?;
+            
+            let version_str = String::from_utf8_lossy(&output.stdout);
+            let current_version = version_str
+                .lines()
+                .next()
+                .and_then(|line| {
+                    // Extract version like "7.1.2-8" from "Version: ImageMagick 7.1.2-8 Q16-HDRI"
+                    line.split_whitespace()
+                        .find(|s| s.starts_with("7."))
+                        .map(|s| s.to_string())
+                })
+                .unwrap_or("unknown".to_string());
+            
+            // Try to get latest version
+            let latest_result = fetch_latest_imagemagick_version().await;
+            let (update_available, latest_version) = match latest_result {
+                Ok(latest_filename) => {
+                    // Extract version from filename like "ImageMagick-7.1.2-8-portable-Q16-HDRI-x64.7z"
+                    // Split by '-' and get parts: ["ImageMagick", "7.1.2", "8", "portable", ...]
+                    let parts: Vec<&str> = latest_filename.split('-').collect();
+                    let latest_version = if parts.len() >= 3 {
+                        // Reconstruct as "7.1.2-8"
+                        format!("{}-{}", parts[1], parts[2])
+                    } else {
+                        "unknown".to_string()
+                    };
+                    
+                    let update_available = if current_version != "unknown" && latest_version != "unknown" {
+                        current_version != latest_version
+                    } else {
+                        false
+                    };
+                    
+                    (update_available, Some(latest_version))
+                }
+                Err(_) => (false, None)
+            };
+            
+            serde_json::json!({
+                "installed": true,
+                "currentVersion": current_version,
+                "updateAvailable": update_available,
+                "latestVersion": latest_version
+            })
+        }
+        Err(_) => {
+            serde_json::json!({
+                "installed": false,
+                "currentVersion": null,
+                "updateAvailable": false,
+                "latestVersion": null
+            })
+        }
+    };
+    updates.insert("imagemagick".to_string(), imagemagick_update);
+    
+    Ok(serde_json::Value::Object(updates))
+}
+
+async fn get_ffmpeg_download_info() -> Result<(String, String, bool), String> {
+    // Always use /latest/ endpoint to get the newest version
     if cfg!(target_os = "windows") {
         Ok((
             "https://github.com/BtbN/FFmpeg-Builds/releases/latest/download/ffmpeg-master-latest-win64-gpl.zip".to_string(),
@@ -1545,26 +1754,27 @@ fn get_ffmpeg_download_info() -> Result<(String, String, bool), String> {
     }
 }
 
-fn get_pandoc_download_info() -> Result<(String, String, bool), String> {
-    // Note: Pandoc releases use version-specific filenames
-    // We use specific known versions that exist on GitHub
-    // In the future, this could use the GitHub API to get the latest release dynamically
+async fn get_pandoc_download_info() -> Result<(String, String, bool), String> {
+    // Dynamically fetch the latest version
+    let latest_version = fetch_latest_pandoc_version().await?;
+    let version_clean = latest_version.trim_start_matches('v');
+    
     if cfg!(target_os = "windows") {
         Ok((
-            "https://github.com/jgm/pandoc/releases/download/3.5/pandoc-3.5-windows-x86_64.zip".to_string(),
+            format!("https://github.com/jgm/pandoc/releases/download/{}/pandoc-{}-windows-x86_64.zip", latest_version, version_clean),
             "pandoc-windows.zip".to_string(),
             true,
         ))
     } else if cfg!(target_os = "macos") {
         // For macOS, we'll use the Intel version as it works on both via Rosetta
         Ok((
-            "https://github.com/jgm/pandoc/releases/download/3.5/pandoc-3.5-x86_64-macOS.zip".to_string(),
+            format!("https://github.com/jgm/pandoc/releases/download/{}/pandoc-{}-x86_64-macOS.zip", latest_version, version_clean),
             "pandoc-macos.zip".to_string(),
             true,
         ))
     } else {
         Ok((
-            "https://github.com/jgm/pandoc/releases/download/3.5/pandoc-3.5-linux-amd64.tar.gz".to_string(),
+            format!("https://github.com/jgm/pandoc/releases/download/{}/pandoc-{}-linux-amd64.tar.gz", latest_version, version_clean),
             "pandoc-linux.tar.gz".to_string(),
             false,
         ))
@@ -1632,6 +1842,66 @@ async fn fetch_latest_imagemagick_version() -> Result<String, String> {
     println!("Found latest ImageMagick version: {}", latest);
     
     Ok(latest)
+}
+
+/// Fetches the latest FFmpeg version from GitHub API
+async fn fetch_latest_ffmpeg_version() -> Result<String, String> {
+    println!("Fetching latest FFmpeg version from GitHub...");
+    
+    // Fetch the most recent releases (not /latest, as that might return a "latest" tag)
+    let url = "https://api.github.com/repos/BtbN/FFmpeg-Builds/releases?per_page=10";
+    let client = reqwest::Client::new();
+    let response = client
+        .get(url)
+        .header("User-Agent", "ConvertSave")
+        .send()
+        .await
+        .map_err(|e| format!("Failed to fetch FFmpeg releases: {}", e))?;
+    
+    let json: serde_json::Value = response.json()
+        .await
+        .map_err(|e| format!("Failed to parse FFmpeg release data: {}", e))?;
+    
+    // Get the first release that starts with "autobuild-" (skip any "latest" or other tags)
+    let releases = json.as_array()
+        .ok_or("Expected array of releases")?;
+    
+    for release in releases {
+        if let Some(tag_name) = release["tag_name"].as_str() {
+            if tag_name.starts_with("autobuild-") {
+                println!("Found latest FFmpeg version: {}", tag_name);
+                return Ok(tag_name.to_string());
+            }
+        }
+    }
+    
+    Err("Could not find any autobuild releases".to_string())
+}
+
+/// Fetches the latest Pandoc version from GitHub API
+async fn fetch_latest_pandoc_version() -> Result<String, String> {
+    println!("Fetching latest Pandoc version from GitHub...");
+    
+    let url = "https://api.github.com/repos/jgm/pandoc/releases/latest";
+    let client = reqwest::Client::new();
+    let response = client
+        .get(url)
+        .header("User-Agent", "ConvertSave")
+        .send()
+        .await
+        .map_err(|e| format!("Failed to fetch Pandoc releases: {}", e))?;
+    
+    let json: serde_json::Value = response.json()
+        .await
+        .map_err(|e| format!("Failed to parse Pandoc release data: {}", e))?;
+    
+    let tag_name = json["tag_name"]
+        .as_str()
+        .ok_or("Could not find Pandoc tag_name")?
+        .to_string();
+    
+    println!("Found latest Pandoc version: {}", tag_name);
+    Ok(tag_name)
 }
 
 fn extract_zip(archive_path: &PathBuf, extract_dir: &PathBuf, binary_name: &str) -> Result<(), String> {
@@ -1823,7 +2093,8 @@ pub fn run() {
             download_pandoc,
             download_imagemagick,
             test_tool,
-            check_tools_status
+            check_tools_status,
+            check_for_updates
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

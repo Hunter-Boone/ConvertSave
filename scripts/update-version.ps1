@@ -12,7 +12,7 @@ if ($NewVersion -notmatch '^\d+\.\d+\.\d+$') {
     exit 1
 }
 
-$RootDir = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
+$RootDir = Split-Path -Parent $PSScriptRoot
 $PackageJson = Join-Path $RootDir "package.json"
 $CargoToml = Join-Path $RootDir "src-tauri" "Cargo.toml"
 $TauriConf = Join-Path $RootDir "src-tauri" "tauri.conf.json"

@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { Download, Check, X, Loader } from "lucide-react";
+import { Download, Check, X, Loader, RefreshCw, AlertCircle } from "lucide-react";
 
 interface ToolStatus {
   ffmpeg: {
@@ -18,6 +18,19 @@ interface ToolStatus {
   };
 }
 
+interface UpdateInfo {
+  installed: boolean;
+  currentVersion: string | null;
+  updateAvailable: boolean;
+  latestVersion: string | null;
+}
+
+interface UpdateStatus {
+  ffmpeg: UpdateInfo;
+  pandoc: UpdateInfo;
+  imagemagick: UpdateInfo;
+}
+
 interface DownloadProgress {
   status: string;
   message: string;
@@ -31,6 +44,8 @@ export default function ToolDownloader({
   onAllToolsReady,
 }: ToolDownloaderProps) {
   const [toolStatus, setToolStatus] = useState<ToolStatus | null>(null);
+  const [updateStatus, setUpdateStatus] = useState<UpdateStatus | null>(null);
+  const [checkingUpdates, setCheckingUpdates] = useState(false);
   const [downloadingTools, setDownloadingTools] = useState<Set<string>>(
     new Set()
   );
@@ -60,6 +75,11 @@ export default function ToolDownloader({
         // Immediately check status to update UI
         // The backend already verified the file exists before emitting "complete"
         checkToolsStatus();
+
+        // Re-check for updates to refresh version information
+        setTimeout(() => {
+          checkForUpdates();
+        }, 500);
 
         // Clear progress message after a short delay
         setTimeout(() => {
@@ -91,12 +111,38 @@ export default function ToolDownloader({
     }
   };
 
+  const checkForUpdates = async () => {
+    setCheckingUpdates(true);
+    setError(null);
+    try {
+      const updates = await invoke<UpdateStatus>("check_for_updates");
+      setUpdateStatus(updates);
+      
+      // Show success message if any updates available
+      const hasUpdates = Object.values(updates).some(
+        (tool) => tool.updateAvailable
+      );
+      if (hasUpdates) {
+        setSuccessMessage("Updates available for some tools!");
+        setTimeout(() => setSuccessMessage(null), 3000);
+      } else {
+        setSuccessMessage("All tools are up to date!");
+        setTimeout(() => setSuccessMessage(null), 2500);
+      }
+    } catch (err) {
+      setError(`Failed to check for updates: ${err}`);
+    } finally {
+      setCheckingUpdates(false);
+    }
+  };
+
   const downloadTool = async (toolName: string) => {
     // Add to downloading set
     setDownloadingTools((prev) => new Set(prev).add(toolName));
     setDownloadProgress(null);
     setError(null);
     setSuccessMessage(null);
+    // Keep updateStatus visible during download so user can see what's being updated
 
     try {
       if (toolName === "ffmpeg") {
@@ -161,21 +207,52 @@ export default function ToolDownloader({
               </p>
             </div>
 
+            {/* Check For Updates Button */}
+            {toolStatus.ffmpeg.available || toolStatus.pandoc.available || toolStatus.imagemagick.available ? (
+              <div className="flex justify-center">
+                <button
+                  onClick={checkForUpdates}
+                  disabled={checkingUpdates}
+                  className="btn-chunky bg-yellow text-dark-purple px-6 py-3 flex items-center space-x-2 hover:shadow-lg transition-shadow"
+                >
+                  {checkingUpdates ? (
+                    <>
+                      <Loader className="w-5 h-5 animate-spin" />
+                      <span>Checking for Updates...</span>
+                    </>
+                  ) : (
+                    <>
+                      <RefreshCw className="w-5 h-5" />
+                      <span>Check For Updates</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            ) : null}
+
             {/* Tool Cards */}
             <div className="space-y-4">
               {/* FFmpeg Card */}
               <div className="bg-white border-2 border-light-purple rounded-xl p-6">
                 <div className="flex items-center justify-between">
                   <div className="flex-1">
-                    <div className="flex items-center space-x-3">
+                    <div className="flex items-center space-x-3 flex-wrap">
                       <h3 className="text-xl font-bold text-dark-purple">
                         FFmpeg
                       </h3>
                       {toolStatus.ffmpeg.available ? (
-                        <div className="flex items-center space-x-1 bg-aquamarine text-dark-purple px-3 py-1 rounded-full text-sm font-bold">
-                          <Check className="w-4 h-4" />
-                          <span>Ready</span>
-                        </div>
+                        <>
+                          <div className="flex items-center space-x-1 bg-aquamarine text-dark-purple px-3 py-1 rounded-full text-sm font-bold">
+                            <Check className="w-4 h-4" />
+                            <span>Ready</span>
+                          </div>
+                          {updateStatus?.ffmpeg?.updateAvailable && (
+                            <div className="flex items-center space-x-1 bg-yellow text-dark-purple px-3 py-1 rounded-full text-sm font-bold">
+                              <AlertCircle className="w-4 h-4" />
+                              <span>Update Available</span>
+                            </div>
+                          )}
+                        </>
                       ) : (
                         <div className="flex items-center space-x-1 bg-yellow text-dark-purple px-3 py-1 rounded-full text-sm font-bold">
                           <X className="w-4 h-4" />
@@ -191,12 +268,23 @@ export default function ToolDownloader({
                         {toolStatus.ffmpeg.path}
                       </p>
                     )}
+                    {updateStatus?.ffmpeg?.currentVersion && (
+                      <p className="text-xs text-light-purple mt-1">
+                        Version: {updateStatus.ffmpeg.currentVersion}
+                        {updateStatus.ffmpeg.latestVersion && 
+                         updateStatus.ffmpeg.updateAvailable && (
+                          <span className="text-dark-purple font-bold ml-1 bg-yellow px-2 py-0.5 rounded">
+                            → {updateStatus.ffmpeg.latestVersion}
+                          </span>
+                        )}
+                      </p>
+                    )}
                   </div>
-                  {!toolStatus.ffmpeg.available && (
+                  {(!toolStatus.ffmpeg.available || updateStatus?.ffmpeg?.updateAvailable) && (
                     <button
                       onClick={() => downloadTool("ffmpeg")}
                       disabled={downloadingTools.has("ffmpeg")}
-                      className="btn-chunky bg-aquamarine text-dark-purple px-6 py-3 flex items-center space-x-2"
+                      className={`btn-chunky ${updateStatus?.ffmpeg?.updateAvailable ? 'bg-yellow' : 'bg-aquamarine'} text-dark-purple px-6 py-3 flex items-center space-x-2`}
                     >
                       {downloadingTools.has("ffmpeg") ? (
                         <>
@@ -206,7 +294,7 @@ export default function ToolDownloader({
                       ) : (
                         <>
                           <Download className="w-5 h-5" />
-                          <span>Download</span>
+                          <span>{updateStatus?.ffmpeg?.updateAvailable ? 'Update' : 'Download'}</span>
                         </>
                       )}
                     </button>
@@ -218,15 +306,23 @@ export default function ToolDownloader({
               <div className="bg-white border-2 border-light-purple rounded-xl p-6">
                 <div className="flex items-center justify-between">
                   <div className="flex-1">
-                    <div className="flex items-center space-x-3">
+                    <div className="flex items-center space-x-3 flex-wrap">
                       <h3 className="text-xl font-bold text-dark-purple">
                         Pandoc
                       </h3>
                       {toolStatus.pandoc.available ? (
-                        <div className="flex items-center space-x-1 bg-aquamarine text-dark-purple px-3 py-1 rounded-full text-sm font-bold">
-                          <Check className="w-4 h-4" />
-                          <span>Ready</span>
-                        </div>
+                        <>
+                          <div className="flex items-center space-x-1 bg-aquamarine text-dark-purple px-3 py-1 rounded-full text-sm font-bold">
+                            <Check className="w-4 h-4" />
+                            <span>Ready</span>
+                          </div>
+                          {updateStatus?.pandoc?.updateAvailable && (
+                            <div className="flex items-center space-x-1 bg-yellow text-dark-purple px-3 py-1 rounded-full text-sm font-bold">
+                              <AlertCircle className="w-4 h-4" />
+                              <span>Update Available</span>
+                            </div>
+                          )}
+                        </>
                       ) : (
                         <div className="flex items-center space-x-1 bg-yellow text-dark-purple px-3 py-1 rounded-full text-sm font-bold">
                           <X className="w-4 h-4" />
@@ -242,12 +338,23 @@ export default function ToolDownloader({
                         {toolStatus.pandoc.path}
                       </p>
                     )}
+                    {updateStatus?.pandoc?.currentVersion && (
+                      <p className="text-xs text-light-purple mt-1">
+                        Version: {updateStatus.pandoc.currentVersion}
+                        {updateStatus.pandoc.latestVersion && 
+                         updateStatus.pandoc.updateAvailable && (
+                          <span className="text-dark-purple font-bold ml-1 bg-yellow px-2 py-0.5 rounded">
+                            → {updateStatus.pandoc.latestVersion}
+                          </span>
+                        )}
+                      </p>
+                    )}
                   </div>
-                  {!toolStatus.pandoc.available && (
+                  {(!toolStatus.pandoc.available || updateStatus?.pandoc?.updateAvailable) && (
                     <button
                       onClick={() => downloadTool("pandoc")}
                       disabled={downloadingTools.has("pandoc")}
-                      className="btn-chunky bg-aquamarine text-dark-purple px-6 py-3 flex items-center space-x-2"
+                      className={`btn-chunky ${updateStatus?.pandoc?.updateAvailable ? 'bg-yellow' : 'bg-aquamarine'} text-dark-purple px-6 py-3 flex items-center space-x-2`}
                     >
                       {downloadingTools.has("pandoc") ? (
                         <>
@@ -257,7 +364,7 @@ export default function ToolDownloader({
                       ) : (
                         <>
                           <Download className="w-5 h-5" />
-                          <span>Download</span>
+                          <span>{updateStatus?.pandoc?.updateAvailable ? 'Update' : 'Download'}</span>
                         </>
                       )}
                     </button>
@@ -269,15 +376,23 @@ export default function ToolDownloader({
               <div className="bg-white border-2 border-light-purple rounded-xl p-6">
                 <div className="flex items-center justify-between">
                   <div className="flex-1">
-                    <div className="flex items-center space-x-3">
+                    <div className="flex items-center space-x-3 flex-wrap">
                       <h3 className="text-xl font-bold text-dark-purple">
                         ImageMagick
                       </h3>
                       {toolStatus.imagemagick.available ? (
-                        <div className="flex items-center space-x-1 bg-aquamarine text-dark-purple px-3 py-1 rounded-full text-sm font-bold">
-                          <Check className="w-4 h-4" />
-                          <span>Ready</span>
-                        </div>
+                        <>
+                          <div className="flex items-center space-x-1 bg-aquamarine text-dark-purple px-3 py-1 rounded-full text-sm font-bold">
+                            <Check className="w-4 h-4" />
+                            <span>Ready</span>
+                          </div>
+                          {updateStatus?.imagemagick?.updateAvailable && (
+                            <div className="flex items-center space-x-1 bg-yellow text-dark-purple px-3 py-1 rounded-full text-sm font-bold">
+                              <AlertCircle className="w-4 h-4" />
+                              <span>Update Available</span>
+                            </div>
+                          )}
+                        </>
                       ) : (
                         <div className="flex items-center space-x-1 bg-yellow text-dark-purple px-3 py-1 rounded-full text-sm font-bold">
                           <X className="w-4 h-4" />
@@ -294,12 +409,23 @@ export default function ToolDownloader({
                           {toolStatus.imagemagick.path}
                         </p>
                       )}
+                    {updateStatus?.imagemagick?.currentVersion && (
+                      <p className="text-xs text-light-purple mt-1">
+                        Version: {updateStatus.imagemagick.currentVersion}
+                        {updateStatus.imagemagick.latestVersion && 
+                         updateStatus.imagemagick.updateAvailable && (
+                          <span className="text-dark-purple font-bold ml-1 bg-yellow px-2 py-0.5 rounded">
+                            → {updateStatus.imagemagick.latestVersion}
+                          </span>
+                        )}
+                      </p>
+                    )}
                   </div>
-                  {!toolStatus.imagemagick.available && (
+                  {(!toolStatus.imagemagick.available || updateStatus?.imagemagick?.updateAvailable) && (
                     <button
                       onClick={() => downloadTool("imagemagick")}
                       disabled={downloadingTools.has("imagemagick")}
-                      className="btn-chunky bg-aquamarine text-dark-purple px-6 py-3 flex items-center space-x-2"
+                      className={`btn-chunky ${updateStatus?.imagemagick?.updateAvailable ? 'bg-yellow' : 'bg-aquamarine'} text-dark-purple px-6 py-3 flex items-center space-x-2`}
                     >
                       {downloadingTools.has("imagemagick") ? (
                         <>
@@ -309,7 +435,7 @@ export default function ToolDownloader({
                       ) : (
                         <>
                           <Download className="w-5 h-5" />
-                          <span>Download</span>
+                          <span>{updateStatus?.imagemagick?.updateAvailable ? 'Update' : 'Download'}</span>
                         </>
                       )}
                     </button>
