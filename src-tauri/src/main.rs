@@ -1237,12 +1237,12 @@ async fn download_imagemagick(app: AppHandle) -> Result<String, String> {
     let data_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
     std::fs::create_dir_all(&data_dir).map_err(|e| e.to_string())?;
     
-    let (download_url, filename, is_zip) = get_imagemagick_download_info()?;
+    let (download_url, filename, is_sevenz) = get_imagemagick_download_info().await?;
     println!("=== IMAGEMAGICK DOWNLOAD ===");
     println!("Download URL: {}", download_url);
     println!("Data dir: {}", data_dir.display());
     println!("Filename: {}", filename);
-    println!("Is ZIP: {}", is_zip);
+    println!("Is 7z: {}", is_sevenz);
     
     let magick_exe = if cfg!(windows) { "magick.exe" } else { "magick" };
     let magick_path = data_dir.join("imagemagick").join(magick_exe);
@@ -1311,34 +1311,76 @@ async fn download_imagemagick(app: AppHandle) -> Result<String, String> {
         println!("Starting extraction to: {}", extract_dir.display());
         println!("Looking for binary: {}", magick_exe);
         
-        if is_zip {
-            // Special handling for ImageMagick .7z.zip files on Windows
-            if filename == "imagemagick-windows.zip" {
-                println!("Extracting ImageMagick .7z.zip nested archive...");
-                match extract_imagemagick_7z_zip(&archive_path, &extract_dir) {
-                    Ok(_) => {
-                        println!("ImageMagick extraction successful!");
-                    },
-                    Err(e) => {
-                        println!("ImageMagick extraction failed: {}", e);
-                        std::fs::remove_file(&archive_path).ok();
-                        return Err(format!("Failed to extract ImageMagick: {}", e));
+        // Windows uses .7z, macOS uses .tar.gz
+        if is_sevenz {
+            // ImageMagick portable .7z archive (Windows)
+            println!("Extracting ImageMagick .7z archive...");
+            sevenz_rust::decompress_file(&archive_path, &extract_dir)
+                .map_err(|e| {
+                    println!("7z extraction failed: {}", e);
+                    std::fs::remove_file(&archive_path).ok();
+                    format!("Failed to extract ImageMagick .7z: {}", e)
+                })?;
+            println!("ImageMagick extraction successful!");
+            
+            // Check if files are in a subdirectory and move them up if needed
+            if !magick_path.exists() {
+                println!("magick.exe not found at root, searching subdirectories...");
+                
+                // Find magick.exe in subdirectories
+                fn find_magick_exe(dir: &std::path::Path) -> Option<std::path::PathBuf> {
+                    if let Ok(entries) = std::fs::read_dir(dir) {
+                        for entry in entries.flatten() {
+                            let path = entry.path();
+                            if path.is_file() && path.file_name().and_then(|n| n.to_str()) == Some("magick.exe") {
+                                return Some(path);
+                            } else if path.is_dir() {
+                                if let Some(found) = find_magick_exe(&path) {
+                                    return Some(found);
+                                }
+                            }
+                        }
                     }
+                    None
                 }
-            } else {
-                // Regular ZIP extraction for other tools
-                match extract_zip(&archive_path, &extract_dir, magick_exe) {
-                    Ok(_) => {
-                        println!("Extraction successful!");
-                    },
-                    Err(e) => {
-                        println!("Extraction failed: {}", e);
-                        std::fs::remove_file(&archive_path).ok();
-                        return Err(format!("Failed to extract ZIP: {}", e));
+                
+                if let Some(found_magick) = find_magick_exe(&extract_dir) {
+                    println!("Found magick.exe at: {}", found_magick.display());
+                    
+                    // Get the directory containing magick.exe
+                    if let Some(source_dir) = found_magick.parent() {
+                        println!("Moving files from {} to {}", source_dir.display(), extract_dir.display());
+                        
+                        // Move all files from source_dir to extract_dir
+                        if let Ok(entries) = std::fs::read_dir(source_dir) {
+                            for entry in entries.flatten() {
+                                let source_path = entry.path();
+                                let file_name = source_path.file_name().unwrap();
+                                let dest_path = extract_dir.join(file_name);
+                                
+                                if let Err(e) = std::fs::rename(&source_path, &dest_path) {
+                                    println!("Failed to move {}: {}", source_path.display(), e);
+                                } else {
+                                    println!("Moved: {} -> {}", source_path.display(), dest_path.display());
+                                }
+                            }
+                        }
+                        
+                        // Clean up the now-empty nested directory
+                        let _ = std::fs::remove_dir_all(source_dir);
+                    }
+                } else {
+                    println!("ERROR: Could not find magick.exe anywhere in extracted files");
+                    println!("Extracted directory contents:");
+                    if let Ok(entries) = std::fs::read_dir(&extract_dir) {
+                        for entry in entries.flatten() {
+                            println!("  - {}", entry.path().display());
+                        }
                     }
                 }
             }
         } else {
+            // macOS tar.gz extraction
             extract_tar_gz(&archive_path, &extract_dir, magick_exe)?;
         }
         
@@ -1348,6 +1390,13 @@ async fn download_imagemagick(app: AppHandle) -> Result<String, String> {
     
     // Verify the file was actually extracted
     if !magick_path.exists() {
+        println!("ERROR: ImageMagick binary still not found at: {}", magick_path.display());
+        println!("Final directory contents:");
+        if let Ok(entries) = std::fs::read_dir(extract_dir) {
+            for entry in entries.flatten() {
+                println!("  - {}", entry.path().display());
+            }
+        }
         return Err(format!("ImageMagick binary not found after extraction at: {}", magick_path.display()));
     }
     
@@ -1522,14 +1571,14 @@ fn get_pandoc_download_info() -> Result<(String, String, bool), String> {
     }
 }
 
-fn get_imagemagick_download_info() -> Result<(String, String, bool), String> {
+async fn get_imagemagick_download_info() -> Result<(String, String, bool), String> {
     if cfg!(target_os = "windows") {
-        // ImageMagick portable .7z.zip from https://imagemagick.org/archive/binaries/
-        // This is a ZIP containing a 7z file containing the binaries
+        // Dynamically fetch the latest portable version from ImageMagick binaries
+        let latest = fetch_latest_imagemagick_version().await?;
         Ok((
-            "https://imagemagick.org/archive/binaries/ImageMagick-7.1.2-5-portable-Q16-HDRI-x64.7z.zip".to_string(),
-            "imagemagick-windows.zip".to_string(),
-            true,
+            format!("https://imagemagick.org/archive/binaries/{}", latest),
+            "imagemagick-windows.7z".to_string(),
+            true, // .7z file
         ))
     } else if cfg!(target_os = "macos") {
         // For macOS from https://imagemagick.org/archive/binaries/
@@ -1548,69 +1597,41 @@ fn get_imagemagick_download_info() -> Result<(String, String, bool), String> {
     }
 }
 
-// Special extractor for ImageMagick .7z.zip nested archives
-fn extract_imagemagick_7z_zip(archive_path: &PathBuf, extract_dir: &PathBuf) -> Result<(), String> {
+/// Fetches the latest ImageMagick portable version from the binaries page
+async fn fetch_latest_imagemagick_version() -> Result<String, String> {
+    println!("Fetching latest ImageMagick version from binaries page...");
     
-    println!("Opening outer ZIP: {}", archive_path.display());
-    let file = std::fs::File::open(archive_path).map_err(|e| e.to_string())?;
-    let mut archive = zip::ZipArchive::new(file).map_err(|e| e.to_string())?;
+    let url = "https://imagemagick.org/archive/binaries/";
+    let response = reqwest::get(url)
+        .await
+        .map_err(|e| format!("Failed to fetch binaries page: {}", e))?;
     
-    // Extract outer ZIP to temp location
-    let temp_dir = extract_dir.join("temp_outer");
-    std::fs::create_dir_all(&temp_dir).map_err(|e| e.to_string())?;
+    let html = response.text()
+        .await
+        .map_err(|e| format!("Failed to read binaries page: {}", e))?;
     
-    println!("Extracting outer ZIP ({} files)...", archive.len());
-    for i in 0..archive.len() {
-        let mut file = archive.by_index(i).map_err(|e| e.to_string())?;
-        let outpath = match file.enclosed_name() {
-            Some(path) => temp_dir.join(path),
-            None => continue,
-        };
-        
-        if file.name().ends_with('/') {
-            std::fs::create_dir_all(&outpath).map_err(|e| e.to_string())?;
-        } else {
-            if let Some(p) = outpath.parent() {
-                std::fs::create_dir_all(p).map_err(|e| e.to_string())?;
-            }
-            let mut outfile = std::fs::File::create(&outpath).map_err(|e| e.to_string())?;
-            std::io::copy(&mut file, &mut outfile).map_err(|e| e.to_string())?;
-            println!("Extracted: {}", outpath.display());
-        }
+    // Parse HTML to find latest portable Q16-HDRI-x64.7z file
+    // Looking for pattern: ImageMagick-7.1.X-XX-portable-Q16-HDRI-x64.7z
+    let pattern = r#"ImageMagick-7\.\d+\.\d+-\d+-portable-Q16-HDRI-x64\.7z"#;
+    let re = regex::Regex::new(pattern).map_err(|e| format!("Regex error: {}", e))?;
+    
+    let mut versions: Vec<String> = re
+        .find_iter(&html)
+        .map(|m| m.as_str().to_string())
+        .collect();
+    
+    if versions.is_empty() {
+        return Err("No portable ImageMagick versions found on binaries page".to_string());
     }
     
-    // Find the .7z file inside
-    fn find_7z_file(dir: &std::path::Path) -> Option<std::path::PathBuf> {
-        if let Ok(entries) = std::fs::read_dir(dir) {
-            for entry in entries.flatten() {
-                let path = entry.path();
-                if path.is_file() && path.extension().and_then(|s| s.to_str()) == Some("7z") {
-                    return Some(path);
-                } else if path.is_dir() {
-                    if let Some(found) = find_7z_file(&path) {
-                        return Some(found);
-                    }
-                }
-            }
-        }
-        None
-    }
+    // Sort versions to get the latest (lexicographic sort works for this format)
+    versions.sort();
+    versions.reverse();
     
-    let sevenz_path = find_7z_file(&temp_dir)
-        .ok_or_else(|| "Could not find .7z file inside ZIP".to_string())?;
+    let latest = versions[0].clone();
+    println!("Found latest ImageMagick version: {}", latest);
     
-    println!("Found 7z archive: {}", sevenz_path.display());
-    
-    // Extract the .7z file
-    println!("Extracting 7z archive...");
-    sevenz_rust::decompress_file(&sevenz_path, extract_dir)
-        .map_err(|e| format!("Failed to extract 7z: {}", e))?;
-    
-    // Clean up temp directory
-    std::fs::remove_dir_all(&temp_dir).ok();
-    
-    println!("7z extraction complete!");
-    Ok(())
+    Ok(latest)
 }
 
 fn extract_zip(archive_path: &PathBuf, extract_dir: &PathBuf, binary_name: &str) -> Result<(), String> {

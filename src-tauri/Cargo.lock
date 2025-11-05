@@ -494,6 +494,7 @@ dependencies = [
  "dirs 5.0.1",
  "flate2",
  "lzma-rs",
+ "regex",
  "reqwest",
  "serde",
  "serde_json",
