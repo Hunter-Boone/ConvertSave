@@ -48,9 +48,9 @@ $updated1 = Update-Version -FilePath $PackageJson `
     -Pattern '("version"\s*:\s*)"[\d\.]+"' `
     -Replacement "`$1`"$NewVersion`""
 
-# Update Cargo.toml
+# Update Cargo.toml (only the package version, not dependencies)
 $updated2 = Update-Version -FilePath $CargoToml `
-    -Pattern '(version\s*=\s*)"[\d\.]+"' `
+    -Pattern '(\[package\][\s\S]*?version\s*=\s*)"[\d\.]+"' `
     -Replacement "`$1`"$NewVersion`""
 
 # Update tauri.conf.json

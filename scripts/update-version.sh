@@ -64,9 +64,22 @@ update_version() {
 update_version "$PACKAGE_JSON" \
     's/("version"[[:space:]]*:[[:space:]]*)"[0-9]+\.[0-9]+\.[0-9]+"/\1"'"$NEW_VERSION"'"/'
 
-# Update Cargo.toml
-update_version "$CARGO_TOML" \
-    's/(version[[:space:]]*=[[:space:]]*)"[0-9]+\.[0-9]+\.[0-9]+"/\1"'"$NEW_VERSION"'"/'
+# Update Cargo.toml (only the package version in [package] section)
+# Use a more specific pattern to avoid changing dependency versions
+if [ -f "$CARGO_TOML" ]; then
+    # Use awk to only replace the version in the [package] section
+    awk -v new_ver="$NEW_VERSION" '
+        /^\[package\]/ { in_package=1 }
+        /^\[/ && !/^\[package\]/ { in_package=0 }
+        in_package && /^version[[:space:]]*=[[:space:]]*"[0-9]+\.[0-9]+\.[0-9]+"/ { 
+            sub(/version[[:space:]]*=[[:space:]]*"[0-9]+\.[0-9]+\.[0-9]+"/, "version = \"" new_ver "\"")
+        }
+        { print }
+    ' "$CARGO_TOML" > "$CARGO_TOML.tmp" && mv "$CARGO_TOML.tmp" "$CARGO_TOML"
+    echo -e "${GREEN}✓ Updated: $(basename "$CARGO_TOML")${NC}"
+else
+    echo -e "${RED}✗ File not found: $CARGO_TOML${NC}"
+fi
 
 # Update tauri.conf.json
 update_version "$TAURI_CONF" \
