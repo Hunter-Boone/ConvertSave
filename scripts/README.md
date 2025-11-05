@@ -50,6 +50,41 @@ The script will show you the next steps:
 3. Create tag: `git tag v0.1.6`
 4. Push: `git push && git push --tags`
 
+## Re-trigger Release Script
+
+If a GitHub release doesn't have binary assets (only source code), use this script to re-trigger the workflow.
+
+### What It Does:
+
+1. Deletes the local tag
+2. Deletes the remote tag (and the incomplete release)
+3. Creates a new tag at the current commit
+4. Pushes the tag to trigger GitHub Actions
+
+### Usage:
+
+#### Windows (PowerShell):
+
+```powershell
+pwsh ./scripts/retrigger-release.ps1 0.1.5
+```
+
+#### macOS/Linux (Bash):
+
+```bash
+# Make script executable (first time only)
+chmod +x ./scripts/retrigger-release.sh
+
+# Run the script
+./scripts/retrigger-release.sh 0.1.5
+```
+
+### When to Use:
+
+- GitHub release exists but has no binary installers
+- GitHub Actions workflow failed and you want to retry
+- Tag was created manually and didn't trigger the workflow
+
 ## Development Scripts
 
 ### tauri-dev.sh

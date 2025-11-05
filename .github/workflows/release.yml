@@ -109,58 +109,77 @@ jobs:
 
       - name: Organize release files
         run: |
+          set -x  # Enable debug output
           mkdir -p ./release-assets
+          
+          # Debug: Show what was downloaded
+          echo "=== Downloaded artifacts structure ==="
+          ls -la
+          echo "=== Searching for all files recursively ==="
+          find . -type f \( -name "*.deb" -o -name "*.rpm" -o -name "*.AppImage" -o -name "*.dmg" -o -name "*.msi" -o -name "*.exe" \) -ls
 
-          # Linux files - add Linux to filename
-          for file in linux-build/*.deb; do
+          # Linux files - search recursively and add Linux to filename
+          find linux-build -type f -name "*.deb" 2>/dev/null | while read file; do
             if [ -f "$file" ]; then
               filename=$(basename "$file")
               cp "$file" "./release-assets/${filename%.deb}-linux.deb"
+              echo "Copied: $file -> ./release-assets/${filename%.deb}-linux.deb"
             fi
-          done 2>/dev/null || true
+          done || true
 
-          for file in linux-build/*.rpm; do
+          find linux-build -type f -name "*.rpm" 2>/dev/null | while read file; do
             if [ -f "$file" ]; then
               filename=$(basename "$file")
               cp "$file" "./release-assets/${filename%.rpm}-linux.rpm"
+              echo "Copied: $file -> ./release-assets/${filename%.rpm}-linux.rpm"
             fi
-          done 2>/dev/null || true
+          done || true
 
-          for file in linux-build/*.AppImage; do
+          find linux-build -type f -name "*.AppImage" 2>/dev/null | while read file; do
             if [ -f "$file" ]; then
               filename=$(basename "$file")
               cp "$file" "./release-assets/${filename%.AppImage}-linux.AppImage"
+              echo "Copied: $file -> ./release-assets/${filename%.AppImage}-linux.AppImage"
             fi
-          done 2>/dev/null || true
+          done || true
 
-          # macOS files - add macOS to filename
-          for file in macos-build/*.dmg; do
+          # macOS files - search recursively and add macOS to filename
+          find macos-build -type f -name "*.dmg" 2>/dev/null | while read file; do
             if [ -f "$file" ]; then
               filename=$(basename "$file")
               cp "$file" "./release-assets/${filename%.dmg}-macos.dmg"
+              echo "Copied: $file -> ./release-assets/${filename%.dmg}-macos.dmg"
             fi
-          done 2>/dev/null || true
+          done || true
 
-          # Windows files - add Windows to filename
-          for file in windows-build/*.msi; do
+          # Windows files - search recursively and add Windows to filename
+          find windows-build -type f -name "*.msi" 2>/dev/null | while read file; do
             if [ -f "$file" ]; then
               filename=$(basename "$file")
               cp "$file" "./release-assets/${filename%.msi}-windows.msi"
+              echo "Copied: $file -> ./release-assets/${filename%.msi}-windows.msi"
             fi
-          done 2>/dev/null || true
+          done || true
 
-          for file in windows-build/*.exe; do
+          find windows-build -type f -name "*.exe" 2>/dev/null | while read file; do
             if [ -f "$file" ]; then
               filename=$(basename "$file")
               cp "$file" "./release-assets/${filename%.exe}-windows.exe"
+              echo "Copied: $file -> ./release-assets/${filename%.exe}-windows.exe"
             fi
-          done 2>/dev/null || true
+          done || true
 
+          echo "=== Release assets ready ==="
+          ls -lah ./release-assets/
+          
+          # Check if we have any files
+          if [ -z "$(ls -A ./release-assets/)" ]; then
+            echo "ERROR: No release assets found!"
+            exit 1
+          fi
+          
           # Remove original artifact directories to prevent double upload
           rm -rf linux-build macos-build windows-build
-
-          echo "Release assets ready:"
-          ls -la ./release-assets/
 
       - name: Create Release
         uses: softprops/action-gh-release@v1
