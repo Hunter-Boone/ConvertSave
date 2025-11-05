@@ -8,6 +8,12 @@ use dirs;
 use serde_json;
 use tauri::{AppHandle, Emitter, Manager};
 
+// Windows-specific imports to hide console windows
+#[cfg(target_os = "windows")]
+use std::os::windows::process::CommandExt;
+#[cfg(target_os = "windows")]
+const CREATE_NO_WINDOW: u32 = 0x08000000;
+
 #[derive(Debug, Serialize, Deserialize)]
 struct ConversionOption {
     format: String,
@@ -20,6 +26,18 @@ struct ConversionOption {
 struct DownloadProgress {
     status: String,
     message: String,
+}
+
+/// Helper function to create a Command that doesn't show a console window on Windows
+fn create_command<S: AsRef<std::ffi::OsStr>>(program: S) -> Command {
+    let mut command = Command::new(program);
+    
+    #[cfg(target_os = "windows")]
+    {
+        command.creation_flags(CREATE_NO_WINDOW);
+    }
+    
+    command
 }
 
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
@@ -490,7 +508,7 @@ async fn open_folder(path: String) -> Result<(), String> {
     
     #[cfg(target_os = "windows")]
     {
-        Command::new("explorer")
+        create_command("explorer")
             .arg(folder)
             .spawn()
             .map_err(|e| format!("Failed to open folder: {}", e))?;
@@ -498,7 +516,7 @@ async fn open_folder(path: String) -> Result<(), String> {
     
     #[cfg(target_os = "macos")]
     {
-        Command::new("open")
+        create_command("open")
             .arg(folder)
             .spawn()
             .map_err(|e| format!("Failed to open folder: {}", e))?;
@@ -506,7 +524,7 @@ async fn open_folder(path: String) -> Result<(), String> {
     
     #[cfg(target_os = "linux")]
     {
-        Command::new("xdg-open")
+        create_command("xdg-open")
             .arg(folder)
             .spawn()
             .map_err(|e| format!("Failed to open folder: {}", e))?;
@@ -730,7 +748,7 @@ fn convert_heic_with_tiles(
     output_path: &PathBuf,
 ) -> Result<(), String> {
     // Step 1: Get metadata to find tile grid dimensions and rotation
-    let metadata_output = Command::new(tool_path)
+    let metadata_output = create_command(tool_path)
         .arg("-i")
         .arg(input_path)
         .arg("-f")
@@ -794,7 +812,7 @@ fn convert_heic_with_tiles(
     println!("Extracting HEIC tiles to: {}", temp_dir.display());
     let tile_pattern = temp_dir.join("tile_%02d.png");
     
-    let extract_output = Command::new(tool_path)
+    let extract_output = create_command(tool_path)
         .arg("-i")
         .arg(input_path)
         .arg("-map")
@@ -819,7 +837,7 @@ fn convert_heic_with_tiles(
     let stitched_path = temp_dir.join("stitched.png");
     let tile_input = temp_dir.join("tile_%02d.png");
     
-    let stitch_output = Command::new(tool_path)
+    let stitch_output = create_command(tool_path)
         .arg("-i")
         .arg(&tile_input)
         .arg("-filter_complex")
@@ -857,7 +875,7 @@ fn convert_heic_with_tiles(
     }
     
     // Step 7: Convert to final format
-    let mut final_command = Command::new(tool_path);
+    let mut final_command = create_command(tool_path);
     final_command
         .arg("-i")
         .arg(&stitched_path);
@@ -932,7 +950,7 @@ async fn execute_conversion(
         }
     };
     
-    let mut command = Command::new(&tool_path);
+    let mut command = create_command(&tool_path);
     
     match actual_tool {
         "imagemagick" => {
@@ -1351,7 +1369,7 @@ async fn test_tool(tool_name: String) -> Result<String, String> {
     };
     
     // ImageMagick uses -version, FFmpeg and Pandoc use -version too
-    let output = Command::new(&tool_path)
+    let output = create_command(&tool_path)
         .arg("-version")
         .output()
         .map_err(|e| e.to_string())?;

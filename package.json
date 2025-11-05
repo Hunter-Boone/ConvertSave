@@ -1,7 +1,7 @@
 {
   "name": "convertsave",
   "private": true,
-  "version": "0.1.4",
+  "version": "0.1.5",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -9,7 +9,8 @@
     "preview": "vite preview",
     "tauri": "tauri",
     "tauri:dev": "./scripts/tauri-dev.sh",
-    "tauri:dev:clean": "./scripts/tauri-dev-clean.sh"
+    "tauri:dev:clean": "./scripts/tauri-dev-clean.sh",
+    "version:update": "pwsh ./scripts/update-version.ps1"
   },
   "dependencies": {
     "react": "^18.3.1",
