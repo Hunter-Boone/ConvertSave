@@ -1152,38 +1152,6 @@ fn is_homebrew_available() -> bool {
         .unwrap_or(false)
 }
 
-/// Automatically install Homebrew on macOS
-#[cfg(target_os = "macos")]
-async fn install_homebrew(app: AppHandle) -> Result<(), String> {
-    use std::process::Command;
-    
-    app.emit("download-progress", DownloadProgress {
-        status: "installing-homebrew".to_string(),
-        message: "Installing Homebrew (this may take a few minutes)...".to_string(),
-    }).ok();
-    
-    println!("Installing Homebrew automatically...");
-    
-    // Run the official Homebrew install script
-    let install_output = Command::new("/bin/bash")
-        .arg("-c")
-        .arg("NONINTERACTIVE=1 /bin/bash -c \"$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)\"")
-        .output()
-        .map_err(|e| format!("Failed to run Homebrew installer: {}", e))?;
-    
-    if !install_output.status.success() {
-        let stderr = String::from_utf8_lossy(&install_output.stderr);
-        return Err(format!("Homebrew installation failed: {}", stderr));
-    }
-    
-    app.emit("download-progress", DownloadProgress {
-        status: "homebrew-installed".to_string(),
-        message: "Homebrew installed successfully!".to_string(),
-    }).ok();
-    
-    println!("Homebrew installed successfully!");
-    Ok(())
-}
 
 /// Install a package via Homebrew on macOS
 #[cfg(target_os = "macos")]
@@ -1263,24 +1231,17 @@ async fn install_via_homebrew(app: AppHandle, package: &str) -> Result<String, S
 
 #[tauri::command]
 async fn download_ffmpeg(app: AppHandle) -> Result<String, String> {
-    // On macOS, use Homebrew (install it automatically if needed)
+    // On macOS, prefer Homebrew but fall back to manual download
     #[cfg(target_os = "macos")]
     {
-        if !is_homebrew_available() {
+        if is_homebrew_available() {
             app.emit("download-progress", DownloadProgress {
-                status: "info".to_string(),
-                message: "Homebrew not found, installing automatically...".to_string(),
+                status: "checking".to_string(),
+                message: "Using Homebrew for installation...".to_string(),
             }).ok();
-            
-            install_homebrew(app.clone()).await?;
+            return install_via_homebrew(app, "ffmpeg").await;
         }
-        
-        app.emit("download-progress", DownloadProgress {
-            status: "checking".to_string(),
-            message: "Using Homebrew for installation...".to_string(),
-        }).ok();
-        
-        return install_via_homebrew(app, "ffmpeg").await;
+        // Fall through to manual download if Homebrew not available
     }
     
     // Manual download for all platforms
@@ -1339,24 +1300,17 @@ async fn download_ffmpeg(app: AppHandle) -> Result<String, String> {
 
 #[tauri::command]
 async fn download_pandoc(app: AppHandle) -> Result<String, String> {
-    // On macOS, use Homebrew (install it automatically if needed)
+    // On macOS, prefer Homebrew but fall back to manual download
     #[cfg(target_os = "macos")]
     {
-        if !is_homebrew_available() {
+        if is_homebrew_available() {
             app.emit("download-progress", DownloadProgress {
-                status: "info".to_string(),
-                message: "Homebrew not found, installing automatically...".to_string(),
+                status: "checking".to_string(),
+                message: "Using Homebrew for installation...".to_string(),
             }).ok();
-            
-            install_homebrew(app.clone()).await?;
+            return install_via_homebrew(app, "pandoc").await;
         }
-        
-        app.emit("download-progress", DownloadProgress {
-            status: "checking".to_string(),
-            message: "Using Homebrew for installation...".to_string(),
-        }).ok();
-        
-        return install_via_homebrew(app, "pandoc").await;
+        // Fall through to manual download if Homebrew not available
     }
     
     // Manual download for all platforms
@@ -1415,24 +1369,17 @@ async fn download_pandoc(app: AppHandle) -> Result<String, String> {
 
 #[tauri::command]
 async fn download_imagemagick(app: AppHandle) -> Result<String, String> {
-    // On macOS, use Homebrew (install it automatically if needed)
+    // On macOS, prefer Homebrew but fall back to manual download
     #[cfg(target_os = "macos")]
     {
-        if !is_homebrew_available() {
+        if is_homebrew_available() {
             app.emit("download-progress", DownloadProgress {
-                status: "info".to_string(),
-                message: "Homebrew not found, installing automatically...".to_string(),
-            }).ok();
-            
-            install_homebrew(app.clone()).await?;
-        }
-        
-        app.emit("download-progress", DownloadProgress {
                 status: "checking".to_string(),
                 message: "Using Homebrew for installation...".to_string(),
-        }).ok();
-        
-        return install_via_homebrew(app, "imagemagick").await;
+            }).ok();
+            return install_via_homebrew(app, "imagemagick").await;
+        }
+        // Fall through to manual download if Homebrew not available
     }
     
     // Manual download for all platforms
@@ -1644,19 +1591,25 @@ async fn download_imagemagick(app: AppHandle) -> Result<String, String> {
                             }
                         }
                         
-                        // Move dylib files from lib directory to same level as binary
+                        // Move ALL dylib files from lib directory to same level as binary
+                        // This includes both ImageMagick libs and system libs like libfreetype
                         if let Some(lib_source) = lib_dir_found {
                             println!("Found lib directory at: {}", lib_source.display());
                             if let Ok(entries) = std::fs::read_dir(&lib_source) {
                                 for entry in entries.flatten() {
                                     let path = entry.path();
-                                    if path.is_file() && path.extension().and_then(|e| e.to_str()) == Some("dylib") {
-                                        if let Some(filename) = path.file_name() {
-                                            let dest = extract_dir.join(filename);
-                                            if let Err(e) = std::fs::rename(&path, &dest) {
-                                                println!("Failed to move {}: {}", filename.to_string_lossy(), e);
-                                            } else {
-                                                println!("Moved dylib: {} -> {}", filename.to_string_lossy(), dest.display());
+                                    if path.is_file() {
+                                        let ext = path.extension().and_then(|e| e.to_str());
+                                        // Move .dylib files and numbered versions like .6.dylib
+                                        if ext == Some("dylib") || 
+                                           path.to_string_lossy().contains(".dylib") {
+                                            if let Some(filename) = path.file_name() {
+                                                let dest = extract_dir.join(filename);
+                                                if let Err(e) = std::fs::rename(&path, &dest) {
+                                                    println!("Failed to move {}: {}", filename.to_string_lossy(), e);
+                                                } else {
+                                                    println!("Moved library: {} -> {}", filename.to_string_lossy(), dest.display());
+                                                }
                                             }
                                         }
                                     }
