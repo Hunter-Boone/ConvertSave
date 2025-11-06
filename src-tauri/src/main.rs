@@ -1152,6 +1152,39 @@ fn is_homebrew_available() -> bool {
         .unwrap_or(false)
 }
 
+/// Automatically install Homebrew on macOS
+#[cfg(target_os = "macos")]
+async fn install_homebrew(app: AppHandle) -> Result<(), String> {
+    use std::process::Command;
+    
+    app.emit("download-progress", DownloadProgress {
+        status: "installing-homebrew".to_string(),
+        message: "Installing Homebrew (this may take a few minutes)...".to_string(),
+    }).ok();
+    
+    println!("Installing Homebrew automatically...");
+    
+    // Run the official Homebrew install script
+    let install_output = Command::new("/bin/bash")
+        .arg("-c")
+        .arg("NONINTERACTIVE=1 /bin/bash -c \"$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)\"")
+        .output()
+        .map_err(|e| format!("Failed to run Homebrew installer: {}", e))?;
+    
+    if !install_output.status.success() {
+        let stderr = String::from_utf8_lossy(&install_output.stderr);
+        return Err(format!("Homebrew installation failed: {}", stderr));
+    }
+    
+    app.emit("download-progress", DownloadProgress {
+        status: "homebrew-installed".to_string(),
+        message: "Homebrew installed successfully!".to_string(),
+    }).ok();
+    
+    println!("Homebrew installed successfully!");
+    Ok(())
+}
+
 /// Install a package via Homebrew on macOS
 #[cfg(target_os = "macos")]
 async fn install_via_homebrew(app: AppHandle, package: &str) -> Result<String, String> {
@@ -1230,22 +1263,24 @@ async fn install_via_homebrew(app: AppHandle, package: &str) -> Result<String, S
 
 #[tauri::command]
 async fn download_ffmpeg(app: AppHandle) -> Result<String, String> {
-    // On macOS, try Homebrew first, fall back to manual download
+    // On macOS, use Homebrew (install it automatically if needed)
     #[cfg(target_os = "macos")]
     {
-        if is_homebrew_available() {
-            app.emit("download-progress", DownloadProgress {
-                status: "checking".to_string(),
-                message: "Using Homebrew for installation...".to_string(),
-            }).ok();
-            return install_via_homebrew(app, "ffmpeg").await;
-        } else {
+        if !is_homebrew_available() {
             app.emit("download-progress", DownloadProgress {
                 status: "info".to_string(),
-                message: "Homebrew not found, using direct download...".to_string(),
+                message: "Homebrew not found, installing automatically...".to_string(),
             }).ok();
-            // Fall through to manual download
+            
+            install_homebrew(app.clone()).await?;
         }
+        
+        app.emit("download-progress", DownloadProgress {
+            status: "checking".to_string(),
+            message: "Using Homebrew for installation...".to_string(),
+        }).ok();
+        
+        return install_via_homebrew(app, "ffmpeg").await;
     }
     
     // Manual download for all platforms
@@ -1304,22 +1339,24 @@ async fn download_ffmpeg(app: AppHandle) -> Result<String, String> {
 
 #[tauri::command]
 async fn download_pandoc(app: AppHandle) -> Result<String, String> {
-    // On macOS, try Homebrew first, fall back to manual download
+    // On macOS, use Homebrew (install it automatically if needed)
     #[cfg(target_os = "macos")]
     {
-        if is_homebrew_available() {
-            app.emit("download-progress", DownloadProgress {
-                status: "checking".to_string(),
-                message: "Using Homebrew for installation...".to_string(),
-            }).ok();
-            return install_via_homebrew(app, "pandoc").await;
-        } else {
+        if !is_homebrew_available() {
             app.emit("download-progress", DownloadProgress {
                 status: "info".to_string(),
-                message: "Homebrew not found, using direct download...".to_string(),
+                message: "Homebrew not found, installing automatically...".to_string(),
             }).ok();
-            // Fall through to manual download
+            
+            install_homebrew(app.clone()).await?;
         }
+        
+        app.emit("download-progress", DownloadProgress {
+            status: "checking".to_string(),
+            message: "Using Homebrew for installation...".to_string(),
+        }).ok();
+        
+        return install_via_homebrew(app, "pandoc").await;
     }
     
     // Manual download for all platforms
@@ -1378,22 +1415,24 @@ async fn download_pandoc(app: AppHandle) -> Result<String, String> {
 
 #[tauri::command]
 async fn download_imagemagick(app: AppHandle) -> Result<String, String> {
-    // On macOS, try Homebrew first, fall back to manual download
+    // On macOS, use Homebrew (install it automatically if needed)
     #[cfg(target_os = "macos")]
     {
-        if is_homebrew_available() {
-            app.emit("download-progress", DownloadProgress {
-                status: "checking".to_string(),
-                message: "Using Homebrew for installation...".to_string(),
-            }).ok();
-            return install_via_homebrew(app, "imagemagick").await;
-        } else {
+        if !is_homebrew_available() {
             app.emit("download-progress", DownloadProgress {
                 status: "info".to_string(),
-                message: "Homebrew not found, using direct download...".to_string(),
+                message: "Homebrew not found, installing automatically...".to_string(),
             }).ok();
-            // Fall through to manual download
+            
+            install_homebrew(app.clone()).await?;
         }
+        
+        app.emit("download-progress", DownloadProgress {
+                status: "checking".to_string(),
+                message: "Using Homebrew for installation...".to_string(),
+        }).ok();
+        
+        return install_via_homebrew(app, "imagemagick").await;
     }
     
     // Manual download for all platforms
@@ -2276,8 +2315,11 @@ fn fix_imagemagick_library_paths(binary_path: &PathBuf, install_dir: &PathBuf) -
         if trimmed.starts_with('/') {
             // Extract the library path (before the version info in parentheses)
             if let Some(lib_path) = trimmed.split_whitespace().next() {
-                // Only fix paths that look like they're from a build directory
-                if lib_path.contains("ImageMagick") || lib_path.contains("/lib/") {
+                // Fix paths that are absolute (ImageMagick libs, X11 libs, etc.)
+                if lib_path.contains("ImageMagick") || 
+                   lib_path.contains("/lib/") || 
+                   lib_path.contains("/opt/") ||
+                   lib_path.contains("/usr/local/") {
                     libs_to_fix.push(lib_path.to_string());
                 }
             }
