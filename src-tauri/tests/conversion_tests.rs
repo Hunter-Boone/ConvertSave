@@ -64,6 +64,15 @@ fn get_tool_path(tool_name: &str) -> Result<PathBuf, String> {
         }
     }
     
+    // 4. On macOS, check Homebrew locations as fallback (Apple Silicon and Intel)
+    #[cfg(target_os = "macos")]
+    {
+        // Apple Silicon Homebrew
+        possible_paths.push(PathBuf::from("/opt/homebrew/bin").join(exe_name));
+        // Intel Homebrew
+        possible_paths.push(PathBuf::from("/usr/local/bin").join(exe_name));
+    }
+    
     // On macOS, NEVER check inside the .app bundle - it's read-only and code-signed
     // On Windows/Linux, we can check relative to executable for bundled binaries
     #[cfg(not(target_os = "macos"))]

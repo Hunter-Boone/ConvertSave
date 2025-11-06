@@ -713,6 +713,15 @@ fn get_tool_path(tool_name: &str) -> Result<PathBuf, String> {
         }
     }
     
+    // 4. On macOS, check Homebrew locations as fallback (Apple Silicon and Intel)
+    #[cfg(target_os = "macos")]
+    {
+        // Apple Silicon Homebrew
+        possible_paths.push(PathBuf::from("/opt/homebrew/bin").join(exe_name));
+        // Intel Homebrew
+        possible_paths.push(PathBuf::from("/usr/local/bin").join(exe_name));
+    }
+    
     // On macOS, NEVER check inside the .app bundle - it's read-only and code-signed
     // On Windows/Linux, we can check relative to executable for bundled binaries
     #[cfg(not(target_os = "macos"))]
@@ -1471,6 +1480,20 @@ async fn download_imagemagick(app: AppHandle) -> Result<String, String> {
                     }
                 }
             }
+            
+            // Fix hardcoded library paths in the ImageMagick binary on macOS
+            #[cfg(target_os = "macos")]
+            if magick_path.exists() {
+                app.emit("download-progress", DownloadProgress {
+                    status: "fixing-paths".to_string(),
+                    message: "Fixing library paths...".to_string(),
+                }).ok();
+                
+                if let Err(e) = fix_imagemagick_library_paths(&magick_path, &extract_dir) {
+                    println!("Warning: Failed to fix library paths: {}", e);
+                    // Don't fail the installation, just warn
+                }
+            }
         }
         
         println!("Removing archive file: {}", archive_path.display());
@@ -2007,6 +2030,154 @@ async fn fetch_latest_pandoc_version() -> Result<String, String> {
     
     println!("Found latest Pandoc version: {}", tag_name);
     Ok(tag_name)
+}
+
+/// Fix hardcoded library paths in ImageMagick binary on macOS
+#[cfg(target_os = "macos")]
+fn fix_imagemagick_library_paths(binary_path: &PathBuf, install_dir: &PathBuf) -> Result<(), String> {
+    use std::process::Command;
+    
+    println!("Fixing library paths in ImageMagick binary...");
+    
+    let lib_dir = install_dir.join("lib");
+    if !lib_dir.exists() {
+        println!("No lib directory found, skipping library path fixes");
+        return Ok(());
+    }
+    
+    // Get list of library dependencies using otool
+    let otool_output = Command::new("otool")
+        .arg("-L")
+        .arg(binary_path)
+        .output()
+        .map_err(|e| format!("Failed to run otool: {}", e))?;
+    
+    let dependencies = String::from_utf8_lossy(&otool_output.stdout);
+    println!("Current library dependencies:\n{}", dependencies);
+    
+    // Find all absolute paths that need to be fixed
+    let mut libs_to_fix = Vec::new();
+    for line in dependencies.lines().skip(1) { // Skip first line (the binary itself)
+        let trimmed = line.trim();
+        if trimmed.starts_with('/') {
+            // Extract the library path (before the version info in parentheses)
+            if let Some(lib_path) = trimmed.split_whitespace().next() {
+                // Only fix paths that look like they're from a build directory
+                if lib_path.contains("ImageMagick") || lib_path.contains("/lib/") {
+                    libs_to_fix.push(lib_path.to_string());
+                }
+            }
+        }
+    }
+    
+    println!("Found {} libraries to fix", libs_to_fix.len());
+    
+    // Fix each library path
+    for old_path in libs_to_fix {
+        // Extract just the library filename
+        if let Some(lib_name) = std::path::Path::new(&old_path).file_name() {
+            let lib_name_str = lib_name.to_string_lossy();
+            
+            // Check if this library exists in our lib directory
+            let new_lib_path = lib_dir.join(lib_name_str.as_ref());
+            if new_lib_path.exists() {
+                // Use @executable_path to make the path relative to the binary
+                let relative_path = format!("@executable_path/lib/{}", lib_name_str);
+                
+                println!("Changing {} -> {}", old_path, relative_path);
+                
+                let result = Command::new("install_name_tool")
+                    .arg("-change")
+                    .arg(&old_path)
+                    .arg(&relative_path)
+                    .arg(binary_path)
+                    .output();
+                
+                match result {
+                    Ok(output) if output.status.success() => {
+                        println!("  ✓ Successfully updated");
+                    }
+                    Ok(output) => {
+                        println!("  ⚠ Warning: {}", String::from_utf8_lossy(&output.stderr));
+                    }
+                    Err(e) => {
+                        println!("  ✗ Failed: {}", e);
+                    }
+                }
+                
+                // Also fix the library file itself if it references other libraries
+                if let Err(e) = fix_library_references(&new_lib_path, &lib_dir) {
+                    println!("  Warning: Failed to fix references in {}: {}", lib_name_str, e);
+                }
+            } else {
+                println!("  ⚠ Library not found in lib directory: {}", lib_name_str);
+            }
+        }
+    }
+    
+    println!("Library path fixing complete!");
+    Ok(())
+}
+
+/// Fix library references within a dylib file
+#[cfg(target_os = "macos")]
+fn fix_library_references(lib_path: &PathBuf, lib_dir: &PathBuf) -> Result<(), String> {
+    use std::process::Command;
+    
+    // Get dependencies of this library
+    let otool_output = Command::new("otool")
+        .arg("-L")
+        .arg(lib_path)
+        .output()
+        .map_err(|e| format!("Failed to run otool on library: {}", e))?;
+    
+    let dependencies = String::from_utf8_lossy(&otool_output.stdout);
+    
+    for line in dependencies.lines().skip(1) {
+        let trimmed = line.trim();
+        if trimmed.starts_with('/') {
+            if let Some(dep_path) = trimmed.split_whitespace().next() {
+                if dep_path.contains("ImageMagick") || dep_path.contains("/lib/") {
+                    if let Some(dep_name) = std::path::Path::new(dep_path).file_name() {
+                        let dep_name_str = dep_name.to_string_lossy();
+                        let new_dep_path = lib_dir.join(dep_name_str.as_ref());
+                        
+                        if new_dep_path.exists() {
+                            let relative_path = format!("@loader_path/{}", dep_name_str);
+                            
+                            let _ = Command::new("install_name_tool")
+                                .arg("-change")
+                                .arg(dep_path)
+                                .arg(&relative_path)
+                                .arg(lib_path)
+                                .output();
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    // Also fix the library's own ID if it's absolute
+    let id_output = Command::new("otool")
+        .arg("-D")
+        .arg(lib_path)
+        .output()
+        .map_err(|e| format!("Failed to get library ID: {}", e))?;
+    
+    let id_str = String::from_utf8_lossy(&id_output.stdout);
+    if let Some(lib_name) = lib_path.file_name() {
+        let lib_name_str = lib_name.to_string_lossy();
+        let new_id = format!("@loader_path/{}", lib_name_str);
+        
+        let _ = Command::new("install_name_tool")
+            .arg("-id")
+            .arg(&new_id)
+            .arg(lib_path)
+            .output();
+    }
+    
+    Ok(())
 }
 
 fn extract_zip(archive_path: &PathBuf, extract_dir: &PathBuf, binary_name: &str) -> Result<(), String> {
