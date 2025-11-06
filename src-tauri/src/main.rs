@@ -1814,11 +1814,17 @@ async fn check_homebrew_updates(package: &str) -> Result<serde_json::Value, Stri
             let update_available = outdated_output.status.success() && 
                                   !outdated_output.stdout.is_empty();
             
+            let latest_version = if update_available {
+                "newer version available".to_string()
+            } else {
+                current_version.clone()
+            };
+            
             Ok(serde_json::json!({
                 "installed": true,
                 "currentVersion": current_version,
                 "updateAvailable": update_available,
-                "latestVersion": if update_available { "newer version available" } else { current_version.clone() }
+                "latestVersion": latest_version
             }))
         }
         _ => {
@@ -2362,13 +2368,12 @@ fn fix_library_references(lib_path: &PathBuf, lib_dir: &PathBuf) -> Result<(), S
     }
     
     // Also fix the library's own ID if it's absolute
-    let id_output = Command::new("otool")
+    let _id_output = Command::new("otool")
         .arg("-D")
         .arg(lib_path)
         .output()
         .map_err(|e| format!("Failed to get library ID: {}", e))?;
     
-    let id_str = String::from_utf8_lossy(&id_output.stdout);
     if let Some(lib_name) = lib_path.file_name() {
         let lib_name_str = lib_name.to_string_lossy();
         let new_id = format!("@loader_path/{}", lib_name_str);
