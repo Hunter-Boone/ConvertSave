@@ -701,29 +701,34 @@ fn get_tool_path(tool_name: &str) -> Result<PathBuf, String> {
         possible_paths.push(app_data_path);
     }
     
-    // 2. Project root tools directory (development)
+    // 2. Project root tools directory (development only)
     if let Ok(current) = std::env::current_dir() {
         possible_paths.push(current.join("tools").join(platform_name).join(exe_name));
     }
     
-    // 3. Relative to executable (production)
-    if let Ok(exe) = std::env::current_exe() {
-        if let Some(parent) = exe.parent() {
-            possible_paths.push(parent.join("tools").join(platform_name).join(exe_name));
-        }
-    }
-    
-    // 4. Parent directory of executable + tools (alternative production layout)
-    if let Ok(exe) = std::env::current_exe() {
-        if let Some(parent) = exe.parent().and_then(|p| p.parent()) {
-            possible_paths.push(parent.join("tools").join(platform_name).join(exe_name));
-        }
-    }
-    
-    // 5. Check if we're in src-tauri directory during development
+    // 3. Check if we're in src-tauri directory during development
     if let Ok(current) = std::env::current_dir() {
         if let Some(parent) = current.parent() {
             possible_paths.push(parent.join("tools").join(platform_name).join(exe_name));
+        }
+    }
+    
+    // On macOS, NEVER check inside the .app bundle - it's read-only and code-signed
+    // On Windows/Linux, we can check relative to executable for bundled binaries
+    #[cfg(not(target_os = "macos"))]
+    {
+        // Relative to executable (production)
+        if let Ok(exe) = std::env::current_exe() {
+            if let Some(parent) = exe.parent() {
+                possible_paths.push(parent.join("tools").join(platform_name).join(exe_name));
+            }
+        }
+        
+        // Parent directory of executable + tools (alternative production layout)
+        if let Ok(exe) = std::env::current_exe() {
+            if let Some(parent) = exe.parent().and_then(|p| p.parent()) {
+                possible_paths.push(parent.join("tools").join(platform_name).join(exe_name));
+            }
         }
     }
     
@@ -951,6 +956,18 @@ async fn execute_conversion(
     };
     
     let mut command = create_command(&tool_path);
+    
+    // On macOS, set DYLD_LIBRARY_PATH for ImageMagick to find its dylibs
+    #[cfg(target_os = "macos")]
+    if actual_tool == "imagemagick" {
+        if let Some(tool_dir) = tool_path.parent() {
+            let lib_path = tool_dir.join("lib");
+            if lib_path.exists() {
+                println!("Setting DYLD_LIBRARY_PATH to: {}", lib_path.display());
+                command.env("DYLD_LIBRARY_PATH", &lib_path);
+            }
+        }
+    }
     
     match actual_tool {
         "imagemagick" => {
@@ -1388,8 +1405,72 @@ async fn download_imagemagick(app: AppHandle) -> Result<String, String> {
                 }
             }
         } else {
-            // macOS tar.gz extraction
-            extract_tar_gz(&archive_path, &extract_dir, magick_exe)?;
+            // macOS tar.gz extraction - extract ALL files for ImageMagick (includes dylibs)
+            extract_tar_gz_all(&archive_path, &extract_dir)?;
+            
+            // Verify the binary was extracted
+            if !magick_path.exists() {
+                println!("magick not found at root, searching subdirectories...");
+                
+                // Find magick in subdirectories
+                fn find_magick(dir: &std::path::Path, exe_name: &str) -> Option<std::path::PathBuf> {
+                    if let Ok(entries) = std::fs::read_dir(dir) {
+                        for entry in entries.flatten() {
+                            let path = entry.path();
+                            if path.is_file() && path.file_name().and_then(|n| n.to_str()) == Some(exe_name) {
+                                return Some(path);
+                            } else if path.is_dir() {
+                                if let Some(found) = find_magick(&path, exe_name) {
+                                    return Some(found);
+                                }
+                            }
+                        }
+                    }
+                    None
+                }
+                
+                if let Some(found_magick) = find_magick(&extract_dir, magick_exe) {
+                    println!("Found magick at: {}", found_magick.display());
+                    
+                    // Get the directory containing magick
+                    if let Some(source_dir) = found_magick.parent() {
+                        println!("Moving files from {} to {}", source_dir.display(), extract_dir.display());
+                        
+                        // Move all files from source_dir to extract_dir (including dylibs)
+                        if let Ok(entries) = std::fs::read_dir(source_dir) {
+                            for entry in entries.flatten() {
+                                let source_path = entry.path();
+                                let file_name = source_path.file_name().unwrap();
+                                let dest_path = extract_dir.join(file_name);
+                                
+                                if let Err(e) = std::fs::rename(&source_path, &dest_path) {
+                                    println!("Failed to move {}: {}", source_path.display(), e);
+                                } else {
+                                    println!("Moved: {} -> {}", source_path.display(), dest_path.display());
+                                }
+                            }
+                        }
+                        
+                        // Also move lib directory if it exists
+                        let lib_source = source_dir.join("lib");
+                        if lib_source.exists() && lib_source.is_dir() {
+                            let lib_dest = extract_dir.join("lib");
+                            if let Err(e) = std::fs::rename(&lib_source, &lib_dest) {
+                                println!("Failed to move lib directory: {}", e);
+                                // Try copying instead
+                                if let Err(e) = copy_dir_all(&lib_source, &lib_dest) {
+                                    println!("Failed to copy lib directory: {}", e);
+                                }
+                            } else {
+                                println!("Moved lib directory to: {}", lib_dest.display());
+                            }
+                        }
+                        
+                        // Clean up the now-empty nested directory
+                        let _ = std::fs::remove_dir_all(source_dir);
+                    }
+                }
+            }
         }
         
         println!("Removing archive file: {}", archive_path.display());
@@ -1426,7 +1507,20 @@ async fn test_tool(tool_name: String) -> Result<String, String> {
     };
     
     // ImageMagick uses -version, FFmpeg and Pandoc use -version too
-    let output = create_command(&tool_path)
+    let mut test_cmd = create_command(&tool_path);
+    
+    // On macOS, set DYLD_LIBRARY_PATH for ImageMagick to find its dylibs
+    #[cfg(target_os = "macos")]
+    if tool_name == "imagemagick" {
+        if let Some(tool_dir) = tool_path.parent() {
+            let lib_path = tool_dir.join("lib");
+            if lib_path.exists() {
+                test_cmd.env("DYLD_LIBRARY_PATH", &lib_path);
+            }
+        }
+    }
+    
+    let output = test_cmd
         .arg("-version")
         .output()
         .map_err(|e| e.to_string())?;
@@ -1668,7 +1762,18 @@ async fn check_for_updates() -> Result<serde_json::Value, String> {
     // Check ImageMagick - with dynamic version checking
     let imagemagick_update = match get_tool_path("imagemagick") {
         Ok(path) => {
-            let output = create_command(&path)
+            let mut version_cmd = create_command(&path);
+            
+            // On macOS, set DYLD_LIBRARY_PATH for ImageMagick to find its dylibs
+            #[cfg(target_os = "macos")]
+            if let Some(tool_dir) = path.parent() {
+                let lib_path = tool_dir.join("lib");
+                if lib_path.exists() {
+                    version_cmd.env("DYLD_LIBRARY_PATH", &lib_path);
+                }
+            }
+            
+            let output = version_cmd
                 .arg("-version")
                 .output()
                 .map_err(|e| e.to_string())?;
@@ -2010,6 +2115,45 @@ fn extract_zip(archive_path: &PathBuf, extract_dir: &PathBuf, binary_name: &str)
     std::fs::remove_dir_all(&temp_extract).ok();
     
     Err(format!("{} binary not found in archive (checked all files)", binary_name))
+}
+
+// Helper function to copy a directory recursively
+fn copy_dir_all(src: &std::path::Path, dst: &std::path::Path) -> std::io::Result<()> {
+    std::fs::create_dir_all(dst)?;
+    for entry in std::fs::read_dir(src)? {
+        let entry = entry?;
+        let ty = entry.file_type()?;
+        if ty.is_dir() {
+            copy_dir_all(&entry.path(), &dst.join(entry.file_name()))?;
+        } else {
+            std::fs::copy(entry.path(), dst.join(entry.file_name()))?;
+        }
+    }
+    Ok(())
+}
+
+// Extract ALL files from a tar.gz archive (used for ImageMagick to get dylibs)
+fn extract_tar_gz_all(archive_path: &PathBuf, extract_dir: &PathBuf) -> Result<(), String> {
+    let file = std::fs::File::open(archive_path).map_err(|e| e.to_string())?;
+    
+    if archive_path.extension().and_then(|s| s.to_str()) == Some("xz") {
+        // Decompress XZ file to memory first, then create tar archive
+        let mut buf_reader = std::io::BufReader::new(file);
+        let mut decompressed_data = Vec::new();
+        lzma_rs::xz_decompress(&mut buf_reader, &mut decompressed_data).map_err(|e| e.to_string())?;
+        let mut archive = tar::Archive::new(std::io::Cursor::new(decompressed_data));
+        
+        // Extract all files
+        archive.unpack(extract_dir).map_err(|e| e.to_string())?;
+    } else {
+        let dec = flate2::read::GzDecoder::new(file);
+        let mut archive = tar::Archive::new(dec);
+        
+        // Extract all files
+        archive.unpack(extract_dir).map_err(|e| e.to_string())?;
+    }
+    
+    Ok(())
 }
 
 fn extract_tar_gz(archive_path: &PathBuf, extract_dir: &PathBuf, binary_name: &str) -> Result<(), String> {

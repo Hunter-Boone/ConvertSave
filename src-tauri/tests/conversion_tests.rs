@@ -57,24 +57,29 @@ fn get_tool_path(tool_name: &str) -> Result<PathBuf, String> {
         possible_paths.push(current.join("tools").join(platform_name).join(exe_name));
     }
     
-    // 3. Relative to executable (production)
-    if let Ok(exe) = std::env::current_exe() {
-        if let Some(parent) = exe.parent() {
-            possible_paths.push(parent.join("tools").join(platform_name).join(exe_name));
-        }
-    }
-    
-    // 4. Parent directory of executable + tools (alternative production layout)
-    if let Ok(exe) = std::env::current_exe() {
-        if let Some(parent) = exe.parent().and_then(|p| p.parent()) {
-            possible_paths.push(parent.join("tools").join(platform_name).join(exe_name));
-        }
-    }
-    
-    // 5. Check if we're in src-tauri directory during development
+    // 3. Check if we're in src-tauri directory during development
     if let Ok(current) = std::env::current_dir() {
         if let Some(parent) = current.parent() {
             possible_paths.push(parent.join("tools").join(platform_name).join(exe_name));
+        }
+    }
+    
+    // On macOS, NEVER check inside the .app bundle - it's read-only and code-signed
+    // On Windows/Linux, we can check relative to executable for bundled binaries
+    #[cfg(not(target_os = "macos"))]
+    {
+        // Relative to executable (production)
+        if let Ok(exe) = std::env::current_exe() {
+            if let Some(parent) = exe.parent() {
+                possible_paths.push(parent.join("tools").join(platform_name).join(exe_name));
+            }
+        }
+        
+        // Parent directory of executable + tools (alternative production layout)
+        if let Ok(exe) = std::env::current_exe() {
+            if let Some(parent) = exe.parent().and_then(|p| p.parent()) {
+                possible_paths.push(parent.join("tools").join(platform_name).join(exe_name));
+            }
         }
     }
     
