@@ -693,9 +693,9 @@ fn get_tool_path(tool_name: &str) -> Result<PathBuf, String> {
     // so we manually construct the same path that Tauri uses
     if let Some(data_dir) = dirs::data_dir() {
         // Tauri's app_data_dir() uses: {data_dir}/{identifier}
-        // Our identifier from tauri.conf.json is "com.convertsave.app"
+        // Our identifier from tauri.conf.json is "com.convertsave"
         let app_data_path = data_dir
-            .join("com.convertsave.app")
+            .join("com.convertsave")
             .join(tool_name)
             .join(exe_name);
         possible_paths.push(app_data_path);
