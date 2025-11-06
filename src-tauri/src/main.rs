@@ -966,18 +966,6 @@ async fn execute_conversion(
     
     let mut command = create_command(&tool_path);
     
-    // On macOS, set DYLD_LIBRARY_PATH for ImageMagick to find its dylibs
-    #[cfg(target_os = "macos")]
-    if actual_tool == "imagemagick" {
-        if let Some(tool_dir) = tool_path.parent() {
-            let lib_path = tool_dir.join("lib");
-            if lib_path.exists() {
-                println!("Setting DYLD_LIBRARY_PATH to: {}", lib_path.display());
-                command.env("DYLD_LIBRARY_PATH", &lib_path);
-            }
-        }
-    }
-    
     match actual_tool {
         "imagemagick" => {
             // ImageMagick 7 syntax: magick input.jpg [options] output.heic
@@ -1154,26 +1142,22 @@ async fn execute_conversion(
 
 // Binary download functions
 
+/// Check if Homebrew is available on the system
+#[cfg(target_os = "macos")]
+fn is_homebrew_available() -> bool {
+    create_command("brew")
+        .arg("--version")
+        .output()
+        .map(|output| output.status.success())
+        .unwrap_or(false)
+}
+
 /// Install a package via Homebrew on macOS
 #[cfg(target_os = "macos")]
 async fn install_via_homebrew(app: AppHandle, package: &str) -> Result<String, String> {
-    // Check if Homebrew is installed
-    let brew_check = create_command("brew")
-        .arg("--version")
-        .output();
-    
-    match brew_check {
-        Err(_) => {
-            return Err(
-                "Homebrew is not installed. Please install Homebrew first:\n\n\
-                /bin/bash -c \"$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)\"\n\n\
-                Then restart the app and try again.".to_string()
-            );
-        }
-        Ok(output) if !output.status.success() => {
-            return Err("Homebrew is not working correctly. Please reinstall Homebrew.".to_string());
-        }
-        _ => {}
+    // Homebrew should be checked before calling this function
+    if !is_homebrew_available() {
+        return Err("Homebrew is not available".to_string());
     }
     
     app.emit("download-progress", DownloadProgress {
@@ -1246,16 +1230,26 @@ async fn install_via_homebrew(app: AppHandle, package: &str) -> Result<String, S
 
 #[tauri::command]
 async fn download_ffmpeg(app: AppHandle) -> Result<String, String> {
-    // On macOS, use Homebrew instead of manual download
+    // On macOS, try Homebrew first, fall back to manual download
     #[cfg(target_os = "macos")]
     {
-        return install_via_homebrew(app, "ffmpeg").await;
+        if is_homebrew_available() {
+            app.emit("download-progress", DownloadProgress {
+                status: "checking".to_string(),
+                message: "Using Homebrew for installation...".to_string(),
+            }).ok();
+            return install_via_homebrew(app, "ffmpeg").await;
+        } else {
+            app.emit("download-progress", DownloadProgress {
+                status: "info".to_string(),
+                message: "Homebrew not found, using direct download...".to_string(),
+            }).ok();
+            // Fall through to manual download
+        }
     }
     
-    // Windows and Linux: manual download
-    #[cfg(not(target_os = "macos"))]
-    {
-        let data_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
+    // Manual download for all platforms
+    let data_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
         std::fs::create_dir_all(&data_dir).map_err(|e| e.to_string())?;
         
         let (download_url, filename, is_zip) = get_ffmpeg_download_info().await?;
@@ -1300,27 +1294,36 @@ async fn download_ffmpeg(app: AppHandle) -> Result<String, String> {
         
         std::fs::remove_file(&archive_path).map_err(|e| e.to_string())?;
         
-        app.emit("download-progress", DownloadProgress {
-            status: "complete".to_string(),
-            message: "FFmpeg downloaded successfully!".to_string(),
-        }).map_err(|e| e.to_string())?;
-        
-        Ok("FFmpeg downloaded successfully".to_string())
-    }
+    app.emit("download-progress", DownloadProgress {
+        status: "complete".to_string(),
+        message: "FFmpeg downloaded successfully!".to_string(),
+    }).map_err(|e| e.to_string())?;
+    
+    Ok("FFmpeg downloaded successfully".to_string())
 }
 
 #[tauri::command]
 async fn download_pandoc(app: AppHandle) -> Result<String, String> {
-    // On macOS, use Homebrew instead of manual download
+    // On macOS, try Homebrew first, fall back to manual download
     #[cfg(target_os = "macos")]
     {
-        return install_via_homebrew(app, "pandoc").await;
+        if is_homebrew_available() {
+            app.emit("download-progress", DownloadProgress {
+                status: "checking".to_string(),
+                message: "Using Homebrew for installation...".to_string(),
+            }).ok();
+            return install_via_homebrew(app, "pandoc").await;
+        } else {
+            app.emit("download-progress", DownloadProgress {
+                status: "info".to_string(),
+                message: "Homebrew not found, using direct download...".to_string(),
+            }).ok();
+            // Fall through to manual download
+        }
     }
     
-    // Windows and Linux: manual download
-    #[cfg(not(target_os = "macos"))]
-    {
-        let data_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
+    // Manual download for all platforms
+    let data_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
         std::fs::create_dir_all(&data_dir).map_err(|e| e.to_string())?;
         
         let (download_url, filename, is_zip) = get_pandoc_download_info().await?;
@@ -1365,26 +1368,35 @@ async fn download_pandoc(app: AppHandle) -> Result<String, String> {
         
         std::fs::remove_file(&archive_path).map_err(|e| e.to_string())?;
         
-        app.emit("download-progress", DownloadProgress {
-            status: "complete".to_string(),
-            message: "Pandoc downloaded successfully!".to_string(),
-        }).map_err(|e| e.to_string())?;
-        
-        Ok("Pandoc downloaded successfully".to_string())
-    }
+    app.emit("download-progress", DownloadProgress {
+        status: "complete".to_string(),
+        message: "Pandoc downloaded successfully!".to_string(),
+    }).map_err(|e| e.to_string())?;
+    
+    Ok("Pandoc downloaded successfully".to_string())
 }
 
 #[tauri::command]
 async fn download_imagemagick(app: AppHandle) -> Result<String, String> {
-    // On macOS, use Homebrew instead of manual download
+    // On macOS, try Homebrew first, fall back to manual download
     #[cfg(target_os = "macos")]
     {
-        return install_via_homebrew(app, "imagemagick").await;
+        if is_homebrew_available() {
+            app.emit("download-progress", DownloadProgress {
+                status: "checking".to_string(),
+                message: "Using Homebrew for installation...".to_string(),
+            }).ok();
+            return install_via_homebrew(app, "imagemagick").await;
+        } else {
+            app.emit("download-progress", DownloadProgress {
+                status: "info".to_string(),
+                message: "Homebrew not found, using direct download...".to_string(),
+            }).ok();
+            // Fall through to manual download
+        }
     }
     
-    // Windows and Linux: manual download
-    #[cfg(not(target_os = "macos"))]
-    {
+    // Manual download for all platforms
     let data_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
     std::fs::create_dir_all(&data_dir).map_err(|e| e.to_string())?;
     
@@ -1600,7 +1612,7 @@ async fn download_imagemagick(app: AppHandle) -> Result<String, String> {
                 }
             }
             
-            // Fix hardcoded library paths in the ImageMagick binary on macOS
+            // On macOS, move dylibs to same directory as binary and fix paths
             #[cfg(target_os = "macos")]
             if magick_path.exists() {
                 app.emit("download-progress", DownloadProgress {
@@ -1608,6 +1620,29 @@ async fn download_imagemagick(app: AppHandle) -> Result<String, String> {
                     message: "Fixing library paths...".to_string(),
                 }).ok();
                 
+                // Move all .dylib files from lib/ to the same directory as the binary
+                let lib_dir = extract_dir.join("lib");
+                if lib_dir.exists() && lib_dir.is_dir() {
+                    if let Ok(entries) = std::fs::read_dir(&lib_dir) {
+                        for entry in entries.flatten() {
+                            let path = entry.path();
+                            if path.is_file() && path.extension().and_then(|e| e.to_str()) == Some("dylib") {
+                                if let Some(filename) = path.file_name() {
+                                    let dest = extract_dir.join(filename);
+                                    if let Err(e) = std::fs::rename(&path, &dest) {
+                                        println!("Failed to move {}: {}", filename.to_string_lossy(), e);
+                                    } else {
+                                        println!("Moved {} to binary directory", filename.to_string_lossy());
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    // Remove the now-empty lib directory
+                    let _ = std::fs::remove_dir_all(&lib_dir);
+                }
+                
+                // Fix the hardcoded library paths
                 if let Err(e) = fix_imagemagick_library_paths(&magick_path, &extract_dir) {
                     println!("Warning: Failed to fix library paths: {}", e);
                     // Don't fail the installation, just warn
@@ -1637,7 +1672,6 @@ async fn download_imagemagick(app: AppHandle) -> Result<String, String> {
     }).map_err(|e| e.to_string())?;
     
     Ok("ImageMagick downloaded successfully".to_string())
-    }
 }
 
 #[tauri::command]
@@ -1650,20 +1684,7 @@ async fn test_tool(tool_name: String) -> Result<String, String> {
     };
     
     // ImageMagick uses -version, FFmpeg and Pandoc use -version too
-    let mut test_cmd = create_command(&tool_path);
-    
-    // On macOS, set DYLD_LIBRARY_PATH for ImageMagick to find its dylibs
-    #[cfg(target_os = "macos")]
-    if tool_name == "imagemagick" {
-        if let Some(tool_dir) = tool_path.parent() {
-            let lib_path = tool_dir.join("lib");
-            if lib_path.exists() {
-                test_cmd.env("DYLD_LIBRARY_PATH", &lib_path);
-            }
-        }
-    }
-    
-    let output = test_cmd
+    let output = create_command(&tool_path)
         .arg("-version")
         .output()
         .map_err(|e| e.to_string())?;
@@ -1842,24 +1863,25 @@ async fn check_homebrew_updates(package: &str) -> Result<serde_json::Value, Stri
 async fn check_for_updates() -> Result<serde_json::Value, String> {
     let mut updates = serde_json::Map::new();
     
-    // On macOS, check via Homebrew
+    // On macOS with Homebrew, check via Homebrew
     #[cfg(target_os = "macos")]
     {
-        let ffmpeg_update = check_homebrew_updates("ffmpeg").await?;
-        updates.insert("ffmpeg".to_string(), ffmpeg_update);
-        
-        let pandoc_update = check_homebrew_updates("pandoc").await?;
-        updates.insert("pandoc".to_string(), pandoc_update);
-        
-        let imagemagick_update = check_homebrew_updates("imagemagick").await?;
-        updates.insert("imagemagick".to_string(), imagemagick_update);
-        
-        return Ok(serde_json::Value::Object(updates));
+        if is_homebrew_available() {
+            let ffmpeg_update = check_homebrew_updates("ffmpeg").await?;
+            updates.insert("ffmpeg".to_string(), ffmpeg_update);
+            
+            let pandoc_update = check_homebrew_updates("pandoc").await?;
+            updates.insert("pandoc".to_string(), pandoc_update);
+            
+            let imagemagick_update = check_homebrew_updates("imagemagick").await?;
+            updates.insert("imagemagick".to_string(), imagemagick_update);
+            
+            return Ok(serde_json::Value::Object(updates));
+        }
+        // Fall through to manual checking if Homebrew not available
     }
     
-    // Windows and Linux: check manually
-    #[cfg(not(target_os = "macos"))]
-    {
+    // Manual update checking for all platforms (including macOS without Homebrew)
     // Check FFmpeg
     let ffmpeg_update = match get_tool_path("ffmpeg") {
         Ok(path) => {
@@ -1993,18 +2015,7 @@ async fn check_for_updates() -> Result<serde_json::Value, String> {
     // Check ImageMagick - with dynamic version checking
     let imagemagick_update = match get_tool_path("imagemagick") {
         Ok(path) => {
-            let mut version_cmd = create_command(&path);
-            
-            // On macOS, set DYLD_LIBRARY_PATH for ImageMagick to find its dylibs
-            #[cfg(target_os = "macos")]
-            if let Some(tool_dir) = path.parent() {
-                let lib_path = tool_dir.join("lib");
-                if lib_path.exists() {
-                    version_cmd.env("DYLD_LIBRARY_PATH", &lib_path);
-                }
-            }
-            
-            let output = version_cmd
+            let output = create_command(&path)
                 .arg("-version")
                 .output()
                 .map_err(|e| e.to_string())?;
@@ -2065,7 +2076,6 @@ async fn check_for_updates() -> Result<serde_json::Value, String> {
     updates.insert("imagemagick".to_string(), imagemagick_update);
     
     Ok(serde_json::Value::Object(updates))
-    }
 }
 
 async fn get_ffmpeg_download_info() -> Result<(String, String, bool), String> {
@@ -2248,12 +2258,6 @@ fn fix_imagemagick_library_paths(binary_path: &PathBuf, install_dir: &PathBuf) -
     
     println!("Fixing library paths in ImageMagick binary...");
     
-    let lib_dir = install_dir.join("lib");
-    if !lib_dir.exists() {
-        println!("No lib directory found, skipping library path fixes");
-        return Ok(());
-    }
-    
     // Get list of library dependencies using otool
     let otool_output = Command::new("otool")
         .arg("-L")
@@ -2287,11 +2291,12 @@ fn fix_imagemagick_library_paths(binary_path: &PathBuf, install_dir: &PathBuf) -
         if let Some(lib_name) = std::path::Path::new(&old_path).file_name() {
             let lib_name_str = lib_name.to_string_lossy();
             
-            // Check if this library exists in our lib directory
-            let new_lib_path = lib_dir.join(lib_name_str.as_ref());
+            // Check if this library exists in the same directory as the binary
+            let new_lib_path = install_dir.join(lib_name_str.as_ref());
             if new_lib_path.exists() {
                 // Use @executable_path to make the path relative to the binary
-                let relative_path = format!("@executable_path/lib/{}", lib_name_str);
+                // Dylibs are now in the same directory, so no lib/ subdirectory
+                let relative_path = format!("@executable_path/{}", lib_name_str);
                 
                 println!("Changing {} -> {}", old_path, relative_path);
                 
@@ -2315,11 +2320,11 @@ fn fix_imagemagick_library_paths(binary_path: &PathBuf, install_dir: &PathBuf) -
                 }
                 
                 // Also fix the library file itself if it references other libraries
-                if let Err(e) = fix_library_references(&new_lib_path, &lib_dir) {
+                if let Err(e) = fix_library_references(&new_lib_path, &install_dir) {
                     println!("  Warning: Failed to fix references in {}: {}", lib_name_str, e);
                 }
             } else {
-                println!("  ⚠ Library not found in lib directory: {}", lib_name_str);
+                println!("  ⚠ Library not found in install directory: {}", lib_name_str);
             }
         }
     }
@@ -2330,7 +2335,7 @@ fn fix_imagemagick_library_paths(binary_path: &PathBuf, install_dir: &PathBuf) -
 
 /// Fix library references within a dylib file
 #[cfg(target_os = "macos")]
-fn fix_library_references(lib_path: &PathBuf, lib_dir: &PathBuf) -> Result<(), String> {
+fn fix_library_references(lib_path: &PathBuf, install_dir: &PathBuf) -> Result<(), String> {
     use std::process::Command;
     
     // Get dependencies of this library
@@ -2349,9 +2354,10 @@ fn fix_library_references(lib_path: &PathBuf, lib_dir: &PathBuf) -> Result<(), S
                 if dep_path.contains("ImageMagick") || dep_path.contains("/lib/") {
                     if let Some(dep_name) = std::path::Path::new(dep_path).file_name() {
                         let dep_name_str = dep_name.to_string_lossy();
-                        let new_dep_path = lib_dir.join(dep_name_str.as_ref());
+                        let new_dep_path = install_dir.join(dep_name_str.as_ref());
                         
                         if new_dep_path.exists() {
+                            // Use @loader_path since dylibs are in the same directory
                             let relative_path = format!("@loader_path/{}", dep_name_str);
                             
                             let _ = Command::new("install_name_tool")
