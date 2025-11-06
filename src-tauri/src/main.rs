@@ -2503,21 +2503,6 @@ fn extract_zip(archive_path: &PathBuf, extract_dir: &PathBuf, binary_name: &str)
     Err(format!("{} binary not found in archive (checked all files)", binary_name))
 }
 
-// Helper function to copy a directory recursively
-fn copy_dir_all(src: &std::path::Path, dst: &std::path::Path) -> std::io::Result<()> {
-    std::fs::create_dir_all(dst)?;
-    for entry in std::fs::read_dir(src)? {
-        let entry = entry?;
-        let ty = entry.file_type()?;
-        if ty.is_dir() {
-            copy_dir_all(&entry.path(), &dst.join(entry.file_name()))?;
-        } else {
-            std::fs::copy(entry.path(), dst.join(entry.file_name()))?;
-        }
-    }
-    Ok(())
-}
-
 // Extract ALL files from a tar.gz archive (used for ImageMagick to get dylibs)
 fn extract_tar_gz_all(archive_path: &PathBuf, extract_dir: &PathBuf) -> Result<(), String> {
     let file = std::fs::File::open(archive_path).map_err(|e| e.to_string())?;
