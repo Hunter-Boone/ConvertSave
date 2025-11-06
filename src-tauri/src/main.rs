@@ -1154,118 +1154,237 @@ async fn execute_conversion(
 
 // Binary download functions
 
-#[tauri::command]
-async fn download_ffmpeg(app: AppHandle) -> Result<String, String> {
-    let data_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
-    std::fs::create_dir_all(&data_dir).map_err(|e| e.to_string())?;
+/// Install a package via Homebrew on macOS
+#[cfg(target_os = "macos")]
+async fn install_via_homebrew(app: AppHandle, package: &str) -> Result<String, String> {
+    // Check if Homebrew is installed
+    let brew_check = create_command("brew")
+        .arg("--version")
+        .output();
     
-    let (download_url, filename, is_zip) = get_ffmpeg_download_info().await?;
-    let ffmpeg_dir = data_dir.join("ffmpeg");
-    let ffmpeg_path = ffmpeg_dir.join(if cfg!(windows) { "ffmpeg.exe" } else { "ffmpeg" });
-    
-    // If FFmpeg already exists, remove it to allow updating
-    if ffmpeg_dir.exists() {
-        println!("Removing existing FFmpeg installation for update...");
-        std::fs::remove_dir_all(&ffmpeg_dir).map_err(|e| format!("Failed to remove old FFmpeg: {}", e))?;
+    match brew_check {
+        Err(_) => {
+            return Err(
+                "Homebrew is not installed. Please install Homebrew first:\n\n\
+                /bin/bash -c \"$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)\"\n\n\
+                Then restart the app and try again.".to_string()
+            );
+        }
+        Ok(output) if !output.status.success() => {
+            return Err("Homebrew is not working correctly. Please reinstall Homebrew.".to_string());
+        }
+        _ => {}
     }
     
     app.emit("download-progress", DownloadProgress {
-        status: "downloading".to_string(),
-        message: "Downloading FFmpeg...".to_string(),
+        status: "checking".to_string(),
+        message: format!("Checking if {} is already installed...", package),
     }).map_err(|e| e.to_string())?;
     
-    let response = reqwest::get(&download_url).await.map_err(|e| e.to_string())?;
-    let bytes = response.bytes().await.map_err(|e| e.to_string())?;
+    // Check if package is already installed
+    let list_output = create_command("brew")
+        .arg("list")
+        .arg(package)
+        .output()
+        .map_err(|e| e.to_string())?;
     
-    let archive_path = data_dir.join(&filename);
-    std::fs::write(&archive_path, bytes).map_err(|e| e.to_string())?;
+    if list_output.status.success() {
+        // Package is installed, try to upgrade it
+        app.emit("download-progress", DownloadProgress {
+            status: "upgrading".to_string(),
+            message: format!("Upgrading {}...", package),
+        }).map_err(|e| e.to_string())?;
+        
+        let upgrade_output = create_command("brew")
+            .arg("upgrade")
+            .arg(package)
+            .output()
+            .map_err(|e| e.to_string())?;
+        
+        if upgrade_output.status.success() {
+            app.emit("download-progress", DownloadProgress {
+                status: "complete".to_string(),
+                message: format!("{} upgraded successfully!", package),
+            }).map_err(|e| e.to_string())?;
+            
+            return Ok(format!("{} upgraded successfully via Homebrew", package));
+        } else {
+            // Upgrade failed, but package is still installed
+            app.emit("download-progress", DownloadProgress {
+                status: "complete".to_string(),
+                message: format!("{} is already up to date", package),
+            }).map_err(|e| e.to_string())?;
+            
+            return Ok(format!("{} is already installed and up to date", package));
+        }
+    }
     
+    // Package not installed, install it
     app.emit("download-progress", DownloadProgress {
-        status: "extracting".to_string(),
-        message: "Extracting FFmpeg...".to_string(),
+        status: "installing".to_string(),
+        message: format!("Installing {} via Homebrew...", package),
     }).map_err(|e| e.to_string())?;
     
-    let extract_dir = data_dir.join("ffmpeg");
-    std::fs::create_dir_all(&extract_dir).map_err(|e| e.to_string())?;
+    let install_output = create_command("brew")
+        .arg("install")
+        .arg(package)
+        .output()
+        .map_err(|e| e.to_string())?;
     
-    if is_zip {
-        extract_zip(&archive_path, &extract_dir, "ffmpeg")?;
-    } else {
-        extract_tar_gz(&archive_path, &extract_dir, "ffmpeg")?;
+    if !install_output.status.success() {
+        let stderr = String::from_utf8_lossy(&install_output.stderr);
+        return Err(format!("Failed to install {} via Homebrew: {}", package, stderr));
     }
-    
-    // Verify the file was actually extracted
-    if !ffmpeg_path.exists() {
-        return Err(format!("FFmpeg binary not found after extraction at: {}", ffmpeg_path.display()));
-    }
-    
-    std::fs::remove_file(&archive_path).map_err(|e| e.to_string())?;
     
     app.emit("download-progress", DownloadProgress {
         status: "complete".to_string(),
-        message: "FFmpeg downloaded successfully!".to_string(),
+        message: format!("{} installed successfully!", package),
     }).map_err(|e| e.to_string())?;
     
-    Ok("FFmpeg downloaded successfully".to_string())
+    Ok(format!("{} installed successfully via Homebrew", package))
+}
+
+#[tauri::command]
+async fn download_ffmpeg(app: AppHandle) -> Result<String, String> {
+    // On macOS, use Homebrew instead of manual download
+    #[cfg(target_os = "macos")]
+    {
+        return install_via_homebrew(app, "ffmpeg").await;
+    }
+    
+    // Windows and Linux: manual download
+    #[cfg(not(target_os = "macos"))]
+    {
+        let data_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
+        std::fs::create_dir_all(&data_dir).map_err(|e| e.to_string())?;
+        
+        let (download_url, filename, is_zip) = get_ffmpeg_download_info().await?;
+        let ffmpeg_dir = data_dir.join("ffmpeg");
+        let ffmpeg_path = ffmpeg_dir.join(if cfg!(windows) { "ffmpeg.exe" } else { "ffmpeg" });
+        
+        // If FFmpeg already exists, remove it to allow updating
+        if ffmpeg_dir.exists() {
+            println!("Removing existing FFmpeg installation for update...");
+            std::fs::remove_dir_all(&ffmpeg_dir).map_err(|e| format!("Failed to remove old FFmpeg: {}", e))?;
+        }
+        
+        app.emit("download-progress", DownloadProgress {
+            status: "downloading".to_string(),
+            message: "Downloading FFmpeg...".to_string(),
+        }).map_err(|e| e.to_string())?;
+        
+        let response = reqwest::get(&download_url).await.map_err(|e| e.to_string())?;
+        let bytes = response.bytes().await.map_err(|e| e.to_string())?;
+        
+        let archive_path = data_dir.join(&filename);
+        std::fs::write(&archive_path, bytes).map_err(|e| e.to_string())?;
+        
+        app.emit("download-progress", DownloadProgress {
+            status: "extracting".to_string(),
+            message: "Extracting FFmpeg...".to_string(),
+        }).map_err(|e| e.to_string())?;
+        
+        let extract_dir = data_dir.join("ffmpeg");
+        std::fs::create_dir_all(&extract_dir).map_err(|e| e.to_string())?;
+        
+        if is_zip {
+            extract_zip(&archive_path, &extract_dir, "ffmpeg")?;
+        } else {
+            extract_tar_gz(&archive_path, &extract_dir, "ffmpeg")?;
+        }
+        
+        // Verify the file was actually extracted
+        if !ffmpeg_path.exists() {
+            return Err(format!("FFmpeg binary not found after extraction at: {}", ffmpeg_path.display()));
+        }
+        
+        std::fs::remove_file(&archive_path).map_err(|e| e.to_string())?;
+        
+        app.emit("download-progress", DownloadProgress {
+            status: "complete".to_string(),
+            message: "FFmpeg downloaded successfully!".to_string(),
+        }).map_err(|e| e.to_string())?;
+        
+        Ok("FFmpeg downloaded successfully".to_string())
+    }
 }
 
 #[tauri::command]
 async fn download_pandoc(app: AppHandle) -> Result<String, String> {
-    let data_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
-    std::fs::create_dir_all(&data_dir).map_err(|e| e.to_string())?;
-    
-    let (download_url, filename, is_zip) = get_pandoc_download_info().await?;
-    let pandoc_dir = data_dir.join("pandoc");
-    let pandoc_path = pandoc_dir.join(if cfg!(windows) { "pandoc.exe" } else { "pandoc" });
-    
-    // If Pandoc already exists, remove it to allow updating
-    if pandoc_dir.exists() {
-        println!("Removing existing Pandoc installation for update...");
-        std::fs::remove_dir_all(&pandoc_dir).map_err(|e| format!("Failed to remove old Pandoc: {}", e))?;
+    // On macOS, use Homebrew instead of manual download
+    #[cfg(target_os = "macos")]
+    {
+        return install_via_homebrew(app, "pandoc").await;
     }
     
-    app.emit("download-progress", DownloadProgress {
-        status: "downloading".to_string(),
-        message: "Downloading Pandoc...".to_string(),
-    }).map_err(|e| e.to_string())?;
-    
-    let response = reqwest::get(&download_url).await.map_err(|e| e.to_string())?;
-    let bytes = response.bytes().await.map_err(|e| e.to_string())?;
-    
-    let archive_path = data_dir.join(&filename);
-    std::fs::write(&archive_path, bytes).map_err(|e| e.to_string())?;
-    
-    app.emit("download-progress", DownloadProgress {
-        status: "extracting".to_string(),
-        message: "Extracting Pandoc...".to_string(),
-    }).map_err(|e| e.to_string())?;
-    
-    let extract_dir = data_dir.join("pandoc");
-    std::fs::create_dir_all(&extract_dir).map_err(|e| e.to_string())?;
-    
-    if is_zip {
-        extract_zip(&archive_path, &extract_dir, "pandoc")?;
-    } else {
-        extract_tar_gz(&archive_path, &extract_dir, "pandoc")?;
+    // Windows and Linux: manual download
+    #[cfg(not(target_os = "macos"))]
+    {
+        let data_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
+        std::fs::create_dir_all(&data_dir).map_err(|e| e.to_string())?;
+        
+        let (download_url, filename, is_zip) = get_pandoc_download_info().await?;
+        let pandoc_dir = data_dir.join("pandoc");
+        let pandoc_path = pandoc_dir.join(if cfg!(windows) { "pandoc.exe" } else { "pandoc" });
+        
+        // If Pandoc already exists, remove it to allow updating
+        if pandoc_dir.exists() {
+            println!("Removing existing Pandoc installation for update...");
+            std::fs::remove_dir_all(&pandoc_dir).map_err(|e| format!("Failed to remove old Pandoc: {}", e))?;
+        }
+        
+        app.emit("download-progress", DownloadProgress {
+            status: "downloading".to_string(),
+            message: "Downloading Pandoc...".to_string(),
+        }).map_err(|e| e.to_string())?;
+        
+        let response = reqwest::get(&download_url).await.map_err(|e| e.to_string())?;
+        let bytes = response.bytes().await.map_err(|e| e.to_string())?;
+        
+        let archive_path = data_dir.join(&filename);
+        std::fs::write(&archive_path, bytes).map_err(|e| e.to_string())?;
+        
+        app.emit("download-progress", DownloadProgress {
+            status: "extracting".to_string(),
+            message: "Extracting Pandoc...".to_string(),
+        }).map_err(|e| e.to_string())?;
+        
+        let extract_dir = data_dir.join("pandoc");
+        std::fs::create_dir_all(&extract_dir).map_err(|e| e.to_string())?;
+        
+        if is_zip {
+            extract_zip(&archive_path, &extract_dir, "pandoc")?;
+        } else {
+            extract_tar_gz(&archive_path, &extract_dir, "pandoc")?;
+        }
+        
+        // Verify the file was actually extracted
+        if !pandoc_path.exists() {
+            return Err(format!("Pandoc binary not found after extraction at: {}", pandoc_path.display()));
+        }
+        
+        std::fs::remove_file(&archive_path).map_err(|e| e.to_string())?;
+        
+        app.emit("download-progress", DownloadProgress {
+            status: "complete".to_string(),
+            message: "Pandoc downloaded successfully!".to_string(),
+        }).map_err(|e| e.to_string())?;
+        
+        Ok("Pandoc downloaded successfully".to_string())
     }
-    
-    // Verify the file was actually extracted
-    if !pandoc_path.exists() {
-        return Err(format!("Pandoc binary not found after extraction at: {}", pandoc_path.display()));
-    }
-    
-    std::fs::remove_file(&archive_path).map_err(|e| e.to_string())?;
-    
-    app.emit("download-progress", DownloadProgress {
-        status: "complete".to_string(),
-        message: "Pandoc downloaded successfully!".to_string(),
-    }).map_err(|e| e.to_string())?;
-    
-    Ok("Pandoc downloaded successfully".to_string())
 }
 
 #[tauri::command]
 async fn download_imagemagick(app: AppHandle) -> Result<String, String> {
+    // On macOS, use Homebrew instead of manual download
+    #[cfg(target_os = "macos")]
+    {
+        return install_via_homebrew(app, "imagemagick").await;
+    }
+    
+    // Windows and Linux: manual download
+    #[cfg(not(target_os = "macos"))]
+    {
     let data_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
     std::fs::create_dir_all(&data_dir).map_err(|e| e.to_string())?;
     
@@ -1518,6 +1637,7 @@ async fn download_imagemagick(app: AppHandle) -> Result<String, String> {
     }).map_err(|e| e.to_string())?;
     
     Ok("ImageMagick downloaded successfully".to_string())
+    }
 }
 
 #[tauri::command]
@@ -1648,10 +1768,92 @@ async fn check_tools_status() -> Result<serde_json::Value, String> {
     Ok(serde_json::Value::Object(status))
 }
 
+/// Check for updates via Homebrew on macOS
+#[cfg(target_os = "macos")]
+async fn check_homebrew_updates(package: &str) -> Result<serde_json::Value, String> {
+    // Check if package is installed via Homebrew
+    let list_output = create_command("brew")
+        .arg("list")
+        .arg(package)
+        .output();
+    
+    match list_output {
+        Ok(output) if output.status.success() => {
+            // Get current version
+            let info_output = create_command("brew")
+                .arg("info")
+                .arg(package)
+                .output()
+                .map_err(|e| e.to_string())?;
+            
+            let info_str = String::from_utf8_lossy(&info_output.stdout);
+            
+            // Parse version from brew info output
+            // Format is like: "ffmpeg: stable 7.1 (bottled), HEAD"
+            let current_version = info_str
+                .lines()
+                .next()
+                .and_then(|line| {
+                    // Extract version after "stable"
+                    if let Some(stable_pos) = line.find("stable ") {
+                        let after_stable = &line[stable_pos + 7..];
+                        after_stable.split_whitespace().next().map(|s| s.to_string())
+                    } else {
+                        None
+                    }
+                })
+                .unwrap_or("unknown".to_string());
+            
+            // Check if updates are available using brew outdated
+            let outdated_output = create_command("brew")
+                .arg("outdated")
+                .arg(package)
+                .output()
+                .map_err(|e| e.to_string())?;
+            
+            let update_available = outdated_output.status.success() && 
+                                  !outdated_output.stdout.is_empty();
+            
+            Ok(serde_json::json!({
+                "installed": true,
+                "currentVersion": current_version,
+                "updateAvailable": update_available,
+                "latestVersion": if update_available { "newer version available" } else { current_version.clone() }
+            }))
+        }
+        _ => {
+            Ok(serde_json::json!({
+                "installed": false,
+                "currentVersion": null,
+                "updateAvailable": false,
+                "latestVersion": null
+            }))
+        }
+    }
+}
+
 #[tauri::command]
 async fn check_for_updates() -> Result<serde_json::Value, String> {
     let mut updates = serde_json::Map::new();
     
+    // On macOS, check via Homebrew
+    #[cfg(target_os = "macos")]
+    {
+        let ffmpeg_update = check_homebrew_updates("ffmpeg").await?;
+        updates.insert("ffmpeg".to_string(), ffmpeg_update);
+        
+        let pandoc_update = check_homebrew_updates("pandoc").await?;
+        updates.insert("pandoc".to_string(), pandoc_update);
+        
+        let imagemagick_update = check_homebrew_updates("imagemagick").await?;
+        updates.insert("imagemagick".to_string(), imagemagick_update);
+        
+        return Ok(serde_json::Value::Object(updates));
+    }
+    
+    // Windows and Linux: check manually
+    #[cfg(not(target_os = "macos"))]
+    {
     // Check FFmpeg
     let ffmpeg_update = match get_tool_path("ffmpeg") {
         Ok(path) => {
@@ -1857,6 +2059,7 @@ async fn check_for_updates() -> Result<serde_json::Value, String> {
     updates.insert("imagemagick".to_string(), imagemagick_update);
     
     Ok(serde_json::Value::Object(updates))
+    }
 }
 
 async fn get_ffmpeg_download_info() -> Result<(String, String, bool), String> {
