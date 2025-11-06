@@ -1572,11 +1572,25 @@ async fn download_imagemagick(app: AppHandle) -> Result<String, String> {
                 if let Some(found_magick) = find_magick(&extract_dir, magick_exe) {
                     println!("Found magick at: {}", found_magick.display());
                     
-                    // Get the directory containing magick
+                    // Get the directory containing magick (e.g., ImageMagick-7.0.10/bin/)
                     if let Some(source_dir) = found_magick.parent() {
                         println!("Moving files from {} to {}", source_dir.display(), extract_dir.display());
                         
-                        // Move all files from source_dir to extract_dir (including dylibs)
+                        // First, check if there's a lib directory at the same level or parent level
+                        let lib_candidates = vec![
+                            source_dir.join("lib"),
+                            source_dir.parent().and_then(|p| Some(p.join("lib"))).unwrap_or_else(|| source_dir.join("lib")),
+                        ];
+                        
+                        let mut lib_dir_found = None;
+                        for lib_candidate in lib_candidates {
+                            if lib_candidate.exists() && lib_candidate.is_dir() {
+                                lib_dir_found = Some(lib_candidate);
+                                break;
+                            }
+                        }
+                        
+                        // Move all files from source_dir to extract_dir
                         if let Ok(entries) = std::fs::read_dir(source_dir) {
                             for entry in entries.flatten() {
                                 let source_path = entry.path();
@@ -1591,56 +1605,43 @@ async fn download_imagemagick(app: AppHandle) -> Result<String, String> {
                             }
                         }
                         
-                        // Also move lib directory if it exists
-                        let lib_source = source_dir.join("lib");
-                        if lib_source.exists() && lib_source.is_dir() {
-                            let lib_dest = extract_dir.join("lib");
-                            if let Err(e) = std::fs::rename(&lib_source, &lib_dest) {
-                                println!("Failed to move lib directory: {}", e);
-                                // Try copying instead
-                                if let Err(e) = copy_dir_all(&lib_source, &lib_dest) {
-                                    println!("Failed to copy lib directory: {}", e);
+                        // Move dylib files from lib directory to same level as binary
+                        if let Some(lib_source) = lib_dir_found {
+                            println!("Found lib directory at: {}", lib_source.display());
+                            if let Ok(entries) = std::fs::read_dir(&lib_source) {
+                                for entry in entries.flatten() {
+                                    let path = entry.path();
+                                    if path.is_file() && path.extension().and_then(|e| e.to_str()) == Some("dylib") {
+                                        if let Some(filename) = path.file_name() {
+                                            let dest = extract_dir.join(filename);
+                                            if let Err(e) = std::fs::rename(&path, &dest) {
+                                                println!("Failed to move {}: {}", filename.to_string_lossy(), e);
+                                            } else {
+                                                println!("Moved dylib: {} -> {}", filename.to_string_lossy(), dest.display());
+                                            }
+                                        }
+                                    }
                                 }
-                            } else {
-                                println!("Moved lib directory to: {}", lib_dest.display());
                             }
                         }
                         
-                        // Clean up the now-empty nested directory
-                        let _ = std::fs::remove_dir_all(source_dir);
+                        // Clean up the nested directory structure
+                        if let Some(parent) = source_dir.parent() {
+                            if parent != extract_dir {
+                                let _ = std::fs::remove_dir_all(parent);
+                            }
+                        }
                     }
                 }
             }
             
-            // On macOS, move dylibs to same directory as binary and fix paths
+            // On macOS, fix hardcoded library paths
             #[cfg(target_os = "macos")]
             if magick_path.exists() {
                 app.emit("download-progress", DownloadProgress {
                     status: "fixing-paths".to_string(),
                     message: "Fixing library paths...".to_string(),
                 }).ok();
-                
-                // Move all .dylib files from lib/ to the same directory as the binary
-                let lib_dir = extract_dir.join("lib");
-                if lib_dir.exists() && lib_dir.is_dir() {
-                    if let Ok(entries) = std::fs::read_dir(&lib_dir) {
-                        for entry in entries.flatten() {
-                            let path = entry.path();
-                            if path.is_file() && path.extension().and_then(|e| e.to_str()) == Some("dylib") {
-                                if let Some(filename) = path.file_name() {
-                                    let dest = extract_dir.join(filename);
-                                    if let Err(e) = std::fs::rename(&path, &dest) {
-                                        println!("Failed to move {}: {}", filename.to_string_lossy(), e);
-                                    } else {
-                                        println!("Moved {} to binary directory", filename.to_string_lossy());
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    // Remove the now-empty lib directory
-                    let _ = std::fs::remove_dir_all(&lib_dir);
-                }
                 
                 // Fix the hardcoded library paths
                 if let Err(e) = fix_imagemagick_library_paths(&magick_path, &extract_dir) {
