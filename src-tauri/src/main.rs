@@ -1178,6 +1178,15 @@ async fn execute_conversion(
 
 // Binary download functions
 
+/// Create a configured HTTP client for downloads
+fn create_http_client() -> Result<reqwest::Client, String> {
+    reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(300)) // 5 minute timeout
+        .user_agent("ConvertSave/1.0")
+        .build()
+        .map_err(|e| format!("Failed to create HTTP client: {}", e))
+}
+
 /// Check if Homebrew is available on the system
 #[cfg(target_os = "macos")]
 fn is_homebrew_available() -> bool {
@@ -1299,7 +1308,15 @@ async fn download_ffmpeg(app: AppHandle) -> Result<String, String> {
             message: "Downloading FFmpeg...".to_string(),
         }).map_err(|e| e.to_string())?;
         
-        let response = reqwest::get(&download_url).await.map_err(|e| e.to_string())?;
+        let client = create_http_client()?;
+        let response = client.get(&download_url).send().await.map_err(|e| {
+            format!("Failed to download FFmpeg: {}. Try again or check your internet connection.", e)
+        })?;
+        
+        if !response.status().is_success() {
+            return Err(format!("Download failed with status: {}. The file may not be available.", response.status()));
+        }
+        
         let bytes = response.bytes().await.map_err(|e| e.to_string())?;
         
         let archive_path = data_dir.join(&filename);
@@ -1368,7 +1385,15 @@ async fn download_pandoc(app: AppHandle) -> Result<String, String> {
             message: "Downloading Pandoc...".to_string(),
         }).map_err(|e| e.to_string())?;
         
-        let response = reqwest::get(&download_url).await.map_err(|e| e.to_string())?;
+        let client = create_http_client()?;
+        let response = client.get(&download_url).send().await.map_err(|e| {
+            format!("Failed to download Pandoc: {}. Try again or check your internet connection.", e)
+        })?;
+        
+        if !response.status().is_success() {
+            return Err(format!("Download failed with status: {}. The file may not be available.", response.status()));
+        }
+        
         let bytes = response.bytes().await.map_err(|e| e.to_string())?;
         
         let archive_path = data_dir.join(&filename);
@@ -1452,12 +1477,31 @@ async fn download_imagemagick(app: AppHandle) -> Result<String, String> {
     }).map_err(|e| e.to_string())?;
     
     println!("Starting download from: {}", download_url);
-    let response = reqwest::get(&download_url).await.map_err(|e| {
-        println!("Download request failed: {}", e);
-        format!("Failed to download ImageMagick: {}", e)
-    })?;
+    
+    // Create a properly configured HTTP client
+    let client = create_http_client()?;
+    
+    let response = client.get(&download_url)
+        .send()
+        .await
+        .map_err(|e| {
+            println!("Download request failed: {}", e);
+            // Provide more helpful error message
+            if e.is_timeout() {
+                format!("Download timed out. Please check your internet connection and try again.")
+            } else if e.is_connect() {
+                format!("Could not connect to imagemagick.org. Please check your internet connection.")
+            } else {
+                format!("Failed to download ImageMagick: {}. Try again or check your internet connection.", e)
+            }
+        })?;
     
     println!("Download response status: {:?}", response.status());
+    
+    if !response.status().is_success() {
+        return Err(format!("Download failed with status: {}. The file may not be available.", response.status()));
+    }
+    
     let bytes = response.bytes().await.map_err(|e| {
         println!("Failed to read bytes: {}", e);
         format!("Failed to read download data: {}", e)
@@ -2161,9 +2205,15 @@ async fn fetch_latest_imagemagick_version() -> Result<String, String> {
     println!("Fetching latest ImageMagick version from binaries page...");
     
     let url = "https://imagemagick.org/archive/binaries/";
-    let response = reqwest::get(url)
+    let client = create_http_client()?;
+    let response = client.get(url)
+        .send()
         .await
         .map_err(|e| format!("Failed to fetch binaries page: {}", e))?;
+    
+    if !response.status().is_success() {
+        return Err(format!("Failed to fetch binaries page: HTTP {}", response.status()));
+    }
     
     let html = response.text()
         .await
@@ -2199,13 +2249,16 @@ async fn fetch_latest_ffmpeg_version() -> Result<String, String> {
     
     // Fetch the most recent releases (not /latest, as that might return a "latest" tag)
     let url = "https://api.github.com/repos/BtbN/FFmpeg-Builds/releases?per_page=10";
-    let client = reqwest::Client::new();
+    let client = create_http_client()?;
     let response = client
         .get(url)
-        .header("User-Agent", "ConvertSave")
         .send()
         .await
         .map_err(|e| format!("Failed to fetch FFmpeg releases: {}", e))?;
+    
+    if !response.status().is_success() {
+        return Err(format!("Failed to fetch FFmpeg releases: HTTP {}", response.status()));
+    }
     
     let json: serde_json::Value = response.json()
         .await
@@ -2232,13 +2285,16 @@ async fn fetch_latest_pandoc_version() -> Result<String, String> {
     println!("Fetching latest Pandoc version from GitHub...");
     
     let url = "https://api.github.com/repos/jgm/pandoc/releases/latest";
-    let client = reqwest::Client::new();
+    let client = create_http_client()?;
     let response = client
         .get(url)
-        .header("User-Agent", "ConvertSave")
         .send()
         .await
         .map_err(|e| format!("Failed to fetch Pandoc releases: {}", e))?;
+    
+    if !response.status().is_success() {
+        return Err(format!("Failed to fetch Pandoc releases: HTTP {}", response.status()));
+    }
     
     let json: serde_json::Value = response.json()
         .await
