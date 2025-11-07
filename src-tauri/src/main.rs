@@ -966,6 +966,22 @@ async fn execute_conversion(
     
     let mut command = create_command(&tool_path);
     
+    // On macOS, set DYLD_LIBRARY_PATH for ImageMagick to find its bundled libraries
+    #[cfg(target_os = "macos")]
+    if actual_tool == "imagemagick" {
+        if let Some(lib_dir) = tool_path.parent() {
+            // If magick is at: ~/Library/Application Support/com.convertsave/imagemagick/magick
+            // Then lib_dir is: ~/Library/Application Support/com.convertsave/imagemagick/
+            // We need to check both the base dir and lib/ subdirectory
+            let dyld_path = format!("{}:{}/lib", 
+                lib_dir.display(), 
+                lib_dir.display()
+            );
+            println!("Setting DYLD_LIBRARY_PATH for ImageMagick: {}", dyld_path);
+            command.env("DYLD_LIBRARY_PATH", dyld_path);
+        }
+    }
+    
     match actual_tool {
         "imagemagick" => {
             // ImageMagick 7 syntax: magick input.jpg [options] output.heic
@@ -1677,9 +1693,23 @@ async fn test_tool(tool_name: String) -> Result<String, String> {
     };
     
     // ImageMagick uses -version, FFmpeg and Pandoc use -version too
-    let output = create_command(&tool_path)
-        .arg("-version")
-        .output()
+    let mut command = create_command(&tool_path);
+    command.arg("-version");
+    
+    // On macOS, set DYLD_LIBRARY_PATH for ImageMagick to find its bundled libraries
+    #[cfg(target_os = "macos")]
+    if tool_name == "imagemagick" {
+        if let Some(lib_dir) = tool_path.parent() {
+            let dyld_path = format!("{}:{}/lib", 
+                lib_dir.display(), 
+                lib_dir.display()
+            );
+            println!("Setting DYLD_LIBRARY_PATH for ImageMagick test: {}", dyld_path);
+            command.env("DYLD_LIBRARY_PATH", dyld_path);
+        }
+    }
+    
+    let output = command.output()
         .map_err(|e| e.to_string())?;
     
     if output.status.success() {
