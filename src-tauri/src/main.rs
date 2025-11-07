@@ -694,11 +694,33 @@ fn get_tool_path(tool_name: &str) -> Result<PathBuf, String> {
     if let Some(data_dir) = dirs::data_dir() {
         // Tauri's app_data_dir() uses: {data_dir}/{identifier}
         // Our identifier from tauri.conf.json is "com.convertsave"
-        let app_data_path = data_dir
-            .join("com.convertsave")
-            .join(tool_name)
-            .join(exe_name);
-        possible_paths.push(app_data_path);
+        
+        // For ImageMagick on macOS, the binary is in bin/ subdirectory as per official structure
+        #[cfg(target_os = "macos")]
+        if tool_name == "imagemagick" {
+            let app_data_path = data_dir
+                .join("com.convertsave")
+                .join(tool_name)
+                .join("bin")
+                .join(exe_name);
+            possible_paths.push(app_data_path);
+        } else {
+            let app_data_path = data_dir
+                .join("com.convertsave")
+                .join(tool_name)
+                .join(exe_name);
+            possible_paths.push(app_data_path);
+        }
+        
+        // For other platforms, use flat structure
+        #[cfg(not(target_os = "macos"))]
+        {
+            let app_data_path = data_dir
+                .join("com.convertsave")
+                .join(tool_name)
+                .join(exe_name);
+            possible_paths.push(app_data_path);
+        }
     }
     
     // 2. Project root tools directory (development only)
@@ -969,16 +991,14 @@ async fn execute_conversion(
     // On macOS, set DYLD_LIBRARY_PATH for ImageMagick to find its bundled libraries
     #[cfg(target_os = "macos")]
     if actual_tool == "imagemagick" {
-        if let Some(lib_dir) = tool_path.parent() {
-            // If magick is at: ~/Library/Application Support/com.convertsave/imagemagick/magick
-            // Then lib_dir is: ~/Library/Application Support/com.convertsave/imagemagick/
-            // We need to check both the base dir and lib/ subdirectory
-            let dyld_path = format!("{}:{}/lib", 
-                lib_dir.display(), 
-                lib_dir.display()
-            );
-            println!("Setting DYLD_LIBRARY_PATH for ImageMagick: {}", dyld_path);
-            command.env("DYLD_LIBRARY_PATH", dyld_path);
+        // tool_path is: ~/Library/Application Support/com.convertsave/imagemagick/bin/magick
+        // We need DYLD_LIBRARY_PATH to point to: ~/Library/Application Support/com.convertsave/imagemagick/lib
+        if let Some(bin_dir) = tool_path.parent() {
+            if let Some(imagemagick_dir) = bin_dir.parent() {
+                let lib_dir = imagemagick_dir.join("lib");
+                println!("Setting DYLD_LIBRARY_PATH for ImageMagick: {}", lib_dir.display());
+                command.env("DYLD_LIBRARY_PATH", lib_dir);
+            }
         }
     }
     
@@ -1149,7 +1169,7 @@ async fn execute_conversion(
             "Input file not found. The file may have been moved or deleted.".to_string()
         } else {
             // For other errors, show the technical details
-            format!("Conversion failed. Error details:\n{}", stderr)
+            format!("Conversion failed. Error details: {}", stderr)
         };
         
         Err(error_msg)
@@ -1411,6 +1431,13 @@ async fn download_imagemagick(app: AppHandle) -> Result<String, String> {
     
     let magick_exe = if cfg!(windows) { "magick.exe" } else { "magick" };
     let imagemagick_dir = data_dir.join("imagemagick");
+    
+    // On macOS, magick binary will be in bin/ subdirectory
+    #[cfg(target_os = "macos")]
+    let magick_path = imagemagick_dir.join("bin").join(magick_exe);
+    
+    // On other platforms, it's in the root
+    #[cfg(not(target_os = "macos"))]
     let magick_path = imagemagick_dir.join(magick_exe);
     
     // If ImageMagick already exists, remove it to allow updating
@@ -1547,115 +1574,65 @@ async fn download_imagemagick(app: AppHandle) -> Result<String, String> {
                 }
             }
         } else {
-            // macOS tar.gz extraction - extract ALL files for ImageMagick (includes dylibs)
+            // macOS tar.gz extraction - Keep ImageMagick structure as-is (bin/ and lib/ directories)
+            // This matches what the official ImageMagick documentation says to do
+            println!("Extracting tarball to: {}", extract_dir.display());
             extract_tar_gz_all(&archive_path, &extract_dir)?;
             
-            // Verify the binary was extracted
-            if !magick_path.exists() {
-                println!("magick not found at root, searching subdirectories...");
-                
-                // Find magick in subdirectories
-                fn find_magick(dir: &std::path::Path, exe_name: &str) -> Option<std::path::PathBuf> {
-                    if let Ok(entries) = std::fs::read_dir(dir) {
-                        for entry in entries.flatten() {
-                            let path = entry.path();
-                            if path.is_file() && path.file_name().and_then(|n| n.to_str()) == Some(exe_name) {
-                                return Some(path);
-                            } else if path.is_dir() {
-                                if let Some(found) = find_magick(&path, exe_name) {
-                                    return Some(found);
-                                }
-                            }
-                        }
-                    }
-                    None
-                }
-                
-                if let Some(found_magick) = find_magick(&extract_dir, magick_exe) {
-                    println!("Found magick at: {}", found_magick.display());
-                    
-                    // Get the directory containing magick (e.g., ImageMagick-7.0.10/bin/)
-                    if let Some(source_dir) = found_magick.parent() {
-                        println!("Moving files from {} to {}", source_dir.display(), extract_dir.display());
-                        
-                        // First, check if there's a lib directory at the same level or parent level
-                        let lib_candidates = vec![
-                            source_dir.join("lib"),
-                            source_dir.parent().and_then(|p| Some(p.join("lib"))).unwrap_or_else(|| source_dir.join("lib")),
-                        ];
-                        
-                        let mut lib_dir_found = None;
-                        for lib_candidate in lib_candidates {
-                            if lib_candidate.exists() && lib_candidate.is_dir() {
-                                lib_dir_found = Some(lib_candidate);
-                                break;
-                            }
-                        }
-                        
-                        // Move all files from source_dir to extract_dir
-                        if let Ok(entries) = std::fs::read_dir(source_dir) {
-                            for entry in entries.flatten() {
-                                let source_path = entry.path();
-                                let file_name = source_path.file_name().unwrap();
-                                let dest_path = extract_dir.join(file_name);
-                                
-                                if let Err(e) = std::fs::rename(&source_path, &dest_path) {
-                                    println!("Failed to move {}: {}", source_path.display(), e);
-                                } else {
-                                    println!("Moved: {} -> {}", source_path.display(), dest_path.display());
-                                }
-                            }
-                        }
-                        
-                        // Move ALL dylib files from lib directory to same level as binary
-                        // This includes both ImageMagick libs and system libs like libfreetype
-                        if let Some(lib_source) = lib_dir_found {
-                            println!("Found lib directory at: {}", lib_source.display());
-                            if let Ok(entries) = std::fs::read_dir(&lib_source) {
-                                for entry in entries.flatten() {
-                                    let path = entry.path();
-                                    if path.is_file() {
-                                        let ext = path.extension().and_then(|e| e.to_str());
-                                        // Move .dylib files and numbered versions like .6.dylib
-                                        if ext == Some("dylib") || 
-                                           path.to_string_lossy().contains(".dylib") {
-                                            if let Some(filename) = path.file_name() {
-                                                let dest = extract_dir.join(filename);
-                                                if let Err(e) = std::fs::rename(&path, &dest) {
-                                                    println!("Failed to move {}: {}", filename.to_string_lossy(), e);
-                                                } else {
-                                                    println!("Moved library: {} -> {}", filename.to_string_lossy(), dest.display());
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                        
-                        // Clean up the nested directory structure
-                        if let Some(parent) = source_dir.parent() {
-                            if parent != extract_dir {
-                                let _ = std::fs::remove_dir_all(parent);
-                            }
+            // DEBUG: List everything that was extracted
+            println!("=== EXTRACTED FILES ===");
+            fn list_all_files(dir: &std::path::Path, prefix: &str) {
+                if let Ok(entries) = std::fs::read_dir(dir) {
+                    for entry in entries.flatten() {
+                        let path = entry.path();
+                        if path.is_dir() {
+                            println!("{}[DIR] {}", prefix, path.file_name().unwrap().to_string_lossy());
+                            list_all_files(&path, &format!("{}  ", prefix));
+                        } else {
+                            println!("{}{}", prefix, path.file_name().unwrap().to_string_lossy());
                         }
                     }
                 }
             }
+            list_all_files(&extract_dir, "");
+            println!("=== END EXTRACTED FILES ===");
             
-            // On macOS, fix hardcoded library paths
-            #[cfg(target_os = "macos")]
-            if magick_path.exists() {
-                app.emit("download-progress", DownloadProgress {
-                    status: "fixing-paths".to_string(),
-                    message: "Fixing library paths...".to_string(),
-                }).ok();
-                
-                // Fix the hardcoded library paths
-                if let Err(e) = fix_imagemagick_library_paths(&magick_path, &extract_dir) {
-                    println!("Warning: Failed to fix library paths: {}", e);
-                    // Don't fail the installation, just warn
+            // The tarball extracts to a subdirectory like ImageMagick-7.1.2/
+            // We need to move everything up one level to extract_dir
+            // Look for the ImageMagick directory
+            let mut imagemagick_root: Option<PathBuf> = None;
+            if let Ok(entries) = std::fs::read_dir(&extract_dir) {
+                for entry in entries.flatten() {
+                    let path = entry.path();
+                    if path.is_dir() && path.file_name().unwrap().to_string_lossy().starts_with("ImageMagick") {
+                        imagemagick_root = Some(path);
+                        break;
+                    }
                 }
+            }
+            
+            if let Some(im_root) = imagemagick_root {
+                println!("Found ImageMagick root directory: {}", im_root.display());
+                
+                // Move all subdirectories (bin/, lib/, etc.) to extract_dir
+                if let Ok(entries) = std::fs::read_dir(&im_root) {
+                    for entry in entries.flatten() {
+                        let source_path = entry.path();
+                        let name = source_path.file_name().unwrap();
+                        let dest_path = extract_dir.join(name);
+                        
+                        println!("Moving {} to {}", source_path.display(), dest_path.display());
+                        if let Err(e) = std::fs::rename(&source_path, &dest_path) {
+                            println!("Failed to move {}: {}", source_path.display(), e);
+                        }
+                    }
+                }
+                
+                // Clean up the now-empty ImageMagick directory
+                let _ = std::fs::remove_dir_all(&im_root);
+                
+                println!("Final structure:");
+                list_all_files(&extract_dir, "");
             }
         }
         
@@ -1699,13 +1676,14 @@ async fn test_tool(tool_name: String) -> Result<String, String> {
     // On macOS, set DYLD_LIBRARY_PATH for ImageMagick to find its bundled libraries
     #[cfg(target_os = "macos")]
     if tool_name == "imagemagick" {
-        if let Some(lib_dir) = tool_path.parent() {
-            let dyld_path = format!("{}:{}/lib", 
-                lib_dir.display(), 
-                lib_dir.display()
-            );
-            println!("Setting DYLD_LIBRARY_PATH for ImageMagick test: {}", dyld_path);
-            command.env("DYLD_LIBRARY_PATH", dyld_path);
+        // tool_path is: ~/Library/Application Support/com.convertsave/imagemagick/bin/magick
+        // lib_dir should be: ~/Library/Application Support/com.convertsave/imagemagick/lib
+        if let Some(bin_dir) = tool_path.parent() {
+            if let Some(imagemagick_dir) = bin_dir.parent() {
+                let lib_dir = imagemagick_dir.join("lib");
+                println!("Setting DYLD_LIBRARY_PATH for ImageMagick test: {}", lib_dir.display());
+                command.env("DYLD_LIBRARY_PATH", lib_dir);
+            }
         }
     }
     
@@ -2161,7 +2139,8 @@ async fn get_imagemagick_download_info() -> Result<(String, String, bool), Strin
             true, // .7z file
         ))
     } else if cfg!(target_os = "macos") {
-        // For macOS from https://imagemagick.org/archive/binaries/
+        // For macOS - download official tarball from ImageMagick.org
+        // This includes bin/ and lib/ directories with all necessary libraries
         Ok((
             "https://imagemagick.org/archive/binaries/ImageMagick-x86_64-apple-darwin20.1.0.tar.gz".to_string(),
             "imagemagick-macos.tar.gz".to_string(),
