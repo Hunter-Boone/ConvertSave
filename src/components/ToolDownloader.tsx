@@ -154,6 +154,18 @@ export default function ToolDownloader({
   const coreToolsReady =
     toolStatus.ffmpeg.available;
 
+  const handleCloseClick = () => {
+    if (!coreToolsReady) {
+      setError("At least one conversion tool must be installed before you can use ConvertSave.");
+      // Clear the error after a few seconds
+      setTimeout(() => {
+        setError(null);
+      }, 5000);
+      return;
+    }
+    onAllToolsReady();
+  };
+
   return (
     <>
       {/* Licenses Modal */}
@@ -241,7 +253,7 @@ export default function ToolDownloader({
       <div className="h-screen bg-light-bg flex flex-col overflow-hidden relative">
         {/* Close Button */}
         <button
-          onClick={onAllToolsReady}
+          onClick={handleCloseClick}
           className="absolute top-6 right-6 z-50 w-10 h-10 bg-white hover:bg-pink rounded-lg flex items-center justify-center transition-colors shadow-lg border-2 border-dark-purple"
           aria-label="Close Tools Manager"
           title="Back to main app"
