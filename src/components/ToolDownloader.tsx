@@ -359,7 +359,7 @@ export default function ToolDownloader({
                       <button
                         onClick={() => downloadTool("ffmpeg")}
                         disabled={downloadingTools.has("ffmpeg")}
-                        className="btn-chunky bg-mint-accent text-dark-purple px-6 py-3 flex items-center space-x-2"
+                        className="btn-chunky bg-mint-accent border-2 border-dark-purple text-dark-purple px-6 py-3 flex items-center space-x-2"
                       >
                         {downloadingTools.has("ffmpeg") ? (
                           <>
@@ -513,7 +513,7 @@ export default function ToolDownloader({
                       <button
                         onClick={() => downloadTool("imagemagick")}
                         disabled={downloadingTools.has("imagemagick")}
-                        className="btn-chunky bg-mint-accent text-dark-purple px-6 py-3 flex items-center space-x-2"
+                        className="btn-chunky bg-mint-accent border-2 border-dark-purple text-dark-purple px-6 py-3 flex items-center space-x-2"
                       >
                         {downloadingTools.has("imagemagick") ? (
                           <>
@@ -573,7 +573,7 @@ export default function ToolDownloader({
               {coreToolsReady && (
                 <button
                   onClick={onAllToolsReady}
-                  className="btn-chunky bg-mint-accent text-dark-purple px-8 py-4 text-lg w-full"
+                  className="btn-chunky bg-mint-accent border-2 border-dark-purple text-dark-purple px-8 py-4 text-lg w-full"
                 >
                   Continue
                 </button>
@@ -598,21 +598,35 @@ export default function ToolDownloader({
 
               {/* Success Message */}
               {successMessage && (
-                <div className="bg-mint-accent border-2 border-dark-purple rounded-xl p-4">
-                  <div className="flex items-center space-x-3">
+                <div className="bg-mint-accent border-2 border-dark-purple rounded-xl p-4 relative">
+                  <div className="flex items-center space-x-3 pr-8">
                     <Check className="w-5 h-5 text-dark-purple" />
                     <p className="font-bold text-dark-purple">{successMessage}</p>
                   </div>
+                  <button
+                    onClick={() => setSuccessMessage(null)}
+                    className="absolute top-3 right-3 w-6 h-6 flex items-center justify-center hover:bg-dark-purple hover:bg-opacity-10 rounded transition-colors"
+                    aria-label="Dismiss"
+                  >
+                    <X className="w-4 h-4 text-dark-purple" />
+                  </button>
                 </div>
               )}
 
               {/* Error Message */}
               {error && (
-                <div className="bg-pink-accent border-2 border-dark-purple rounded-xl p-4">
-                  <div className="flex items-center space-x-3">
+                <div className="bg-pink-accent border-2 border-dark-purple rounded-xl p-4 relative">
+                  <div className="flex items-center space-x-3 pr-8">
                     <X className="w-5 h-5 text-dark-purple" />
                     <p className="font-bold text-dark-purple">{error}</p>
                   </div>
+                  <button
+                    onClick={() => setError(null)}
+                    className="absolute top-3 right-3 w-6 h-6 flex items-center justify-center hover:bg-dark-purple hover:bg-opacity-10 rounded transition-colors"
+                    aria-label="Dismiss"
+                  >
+                    <X className="w-4 h-4 text-dark-purple" />
+                  </button>
                 </div>
               )}
 

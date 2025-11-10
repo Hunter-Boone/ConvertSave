@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { open } from "@tauri-apps/plugin-dialog";
+import { X } from "lucide-react";
 import ToolDownloader from "./components/ToolDownloader";
 import { CustomSelect } from "./components/CustomSelect";
 import { FileInfo } from "./types";
@@ -852,7 +853,7 @@ function App() {
           <button
             onClick={handleConvert}
             disabled={selectedFiles.length === 0 || isConverting}
-            className={`btn-chunky px-8 py-2 ${
+            className={`btn-chunky border-2 border-dark-purple px-8 py-2 ${
               selectedFiles.length === 0 || isConverting
                 ? "bg-lighter-bg text-secondary cursor-not-allowed"
                 : "bg-mint-accent text-dark-purple hover:bg-opacity-80"
@@ -917,7 +918,7 @@ function App() {
                   </p>
                   <button
                     onClick={handleBrowseFiles}
-                    className="btn-chunky bg-mint-accent text-dark-purple px-8 py-3 text-lg hover:bg-opacity-80"
+                    className="btn-chunky bg-mint-accent border-2 border-dark-purple text-dark-purple px-8 py-3 text-lg hover:bg-opacity-80"
                   >
                     Browse
                   </button>
@@ -1013,7 +1014,7 @@ function App() {
           {conversionResult && (
             <div
               className={`
-              p-6 rounded-xl font-normal space-y-3
+              p-6 rounded-xl font-normal space-y-3 relative
               ${
                 conversionResult.success
                   ? "bg-mint-accent text-dark-purple"
@@ -1021,7 +1022,14 @@ function App() {
               }
             `}
             >
-              <p className="font-bold text-lg">{conversionResult.message}</p>
+              <button
+                onClick={() => setConversionResult(null)}
+                className="absolute top-4 right-4 w-6 h-6 flex items-center justify-center hover:bg-dark-purple hover:bg-opacity-10 rounded transition-colors"
+                aria-label="Dismiss"
+              >
+                <X className="w-5 h-5 text-dark-purple" />
+              </button>
+              <p className="font-bold text-lg pr-8">{conversionResult.message}</p>
               {conversionResult.success && conversionResult.outputPath && (
                 <>
                   <p className="text-sm break-all">
