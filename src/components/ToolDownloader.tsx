@@ -1,7 +1,8 @@
 import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { Download, Check, X, Loader, RefreshCw, AlertCircle } from "lucide-react";
+import { Download, Check, X, Loader, ChevronDown, ChevronUp } from "lucide-react";
+import { LGPL_V3_LICENSE, GPL_V3_LICENSE, IMAGEMAGICK_LICENSE } from "../lib/licenses";
 
 interface ToolStatus {
   ffmpeg: {
@@ -55,6 +56,12 @@ export default function ToolDownloader({
     useState<DownloadProgress | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [ffmpegAdvancedOpen, setFfmpegAdvancedOpen] = useState(false);
+  const [imagemagickAdvancedOpen, setImagemagickAdvancedOpen] = useState(false);
+  const [licenseAttributionOpen, setLicenseAttributionOpen] = useState(false);
+  const [aboutOpen, setAboutOpen] = useState(false);
+  const [showLicensesModal, setShowLicensesModal] = useState(false);
+  const [expandedLicense, setExpandedLicense] = useState<string | null>(null);
 
   useEffect(() => {
     checkToolsStatus();
@@ -170,9 +177,9 @@ export default function ToolDownloader({
 
   if (!toolStatus) {
     return (
-      <div className="flex items-center justify-center h-screen bg-off-white">
+      <div className="flex items-center justify-center h-screen bg-light-bg">
         <div className="text-center space-y-4">
-          <Loader className="w-12 h-12 text-aquamarine animate-spin mx-auto" />
+          <Loader className="w-12 h-12 text-mint-accent animate-spin mx-auto" />
           <p className="text-dark-purple font-bold">Checking tool status...</p>
         </div>
       </div>
@@ -185,125 +192,192 @@ export default function ToolDownloader({
   const allToolsReady = coreToolsReady && toolStatus.imagemagick.available;
 
   return (
-    <div className="h-screen bg-off-white flex flex-col overflow-hidden relative">
-      {/* Close Button */}
-      <button
-        onClick={onAllToolsReady}
-        className="absolute top-6 right-6 z-50 w-10 h-10 bg-white hover:bg-pink rounded-lg flex items-center justify-center transition-colors shadow-lg border-2 border-dark-purple"
-        aria-label="Close Tools Manager"
-        title="Back to main app"
-      >
-        <X className="w-6 h-6 text-dark-purple" />
-      </button>
-
-      {/* Main Content Area */}
-      <div className="flex-1 overflow-y-auto overflow-x-hidden">
-        <div className="p-6 flex items-center justify-center min-h-full pt-20">
-          <div className="max-w-2xl w-full space-y-6">
-            {/* Header */}
-            <div className="text-center space-y-2">
-              <h1 className="text-3xl font-bold text-dark-purple">
-                Welcome to ConvertSave
-              </h1>
-              <p className="text-lg text-light-purple">
-                To get started, we need to download some conversion tools
-              </p>
+    <>
+      {/* Licenses Modal */}
+      {showLicensesModal && (
+        <div 
+          className="fixed inset-0 z-[200] flex items-center justify-center bg-dark-purple bg-opacity-50"
+          onClick={() => setShowLicensesModal(false)}
+        >
+          <div 
+            className="bg-white rounded-xl shadow-2xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-hidden flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div className="flex items-center justify-between p-6 border-b border-lighter-bg">
+              <h2 className="text-2xl font-bold text-dark-purple">Licenses</h2>
+              <button
+                onClick={() => setShowLicensesModal(false)}
+                className="w-8 h-8 bg-light-grey hover:bg-pink rounded-lg flex items-center justify-center transition-colors"
+                aria-label="Close"
+              >
+                <X className="w-5 h-5 text-dark-purple" />
+              </button>
             </div>
+            
+            {/* Modal Content */}
+            <div className="flex-1 overflow-y-auto p-6 space-y-4">
+              {/* GNU LGPLv3 */}
+              <button
+                onClick={() => setExpandedLicense(expandedLicense === "lgpl" ? null : "lgpl")}
+                className="w-full p-4 bg-white border-2 border-dark-purple rounded-xl flex items-center justify-between hover:bg-light-bg transition-colors"
+              >
+                <span className="font-bold text-dark-purple">GNU LGPLv3</span>
+                {expandedLicense === "lgpl" ? (
+                  <ChevronUp className="w-5 h-5 text-dark-purple" />
+                ) : (
+                  <ChevronDown className="w-5 h-5 text-dark-purple" />
+                )}
+              </button>
+              {expandedLicense === "lgpl" && (
+                <div className="p-4 bg-light-bg rounded-xl text-xs text-secondary whitespace-pre-wrap font-mono max-h-96 overflow-y-auto">
+                  {LGPL_V3_LICENSE}
+                </div>
+              )}
 
-            {/* Check For Updates Button */}
-            {toolStatus.ffmpeg.available || toolStatus.imagemagick.available ? (
-              <div className="flex justify-center">
-                <button
-                  onClick={checkForUpdates}
-                  disabled={checkingUpdates}
-                  className="btn-chunky bg-yellow text-dark-purple px-6 py-3 flex items-center space-x-2 hover:shadow-lg transition-shadow"
-                >
-                  {checkingUpdates ? (
-                    <>
-                      <Loader className="w-5 h-5 animate-spin" />
-                      <span>Checking for Updates...</span>
-                    </>
-                  ) : (
-                    <>
-                      <RefreshCw className="w-5 h-5" />
-                      <span>Check For Updates</span>
-                    </>
-                  )}
-                </button>
+              {/* GNU GPLv3 */}
+              <button
+                onClick={() => setExpandedLicense(expandedLicense === "gpl" ? null : "gpl")}
+                className="w-full p-4 bg-white border-2 border-dark-purple rounded-xl flex items-center justify-between hover:bg-light-bg transition-colors"
+              >
+                <span className="font-bold text-dark-purple">GNU GPLv3</span>
+                {expandedLicense === "gpl" ? (
+                  <ChevronUp className="w-5 h-5 text-dark-purple" />
+                ) : (
+                  <ChevronDown className="w-5 h-5 text-dark-purple" />
+                )}
+              </button>
+              {expandedLicense === "gpl" && (
+                <div className="p-4 bg-light-bg rounded-xl text-xs text-secondary whitespace-pre-wrap font-mono max-h-96 overflow-y-auto">
+                  {GPL_V3_LICENSE}
+                </div>
+              )}
+
+              {/* ImageMagick License */}
+              <button
+                onClick={() => setExpandedLicense(expandedLicense === "imagemagick" ? null : "imagemagick")}
+                className="w-full p-4 bg-white border-2 border-dark-purple rounded-xl flex items-center justify-between hover:bg-light-bg transition-colors"
+              >
+                <span className="font-bold text-dark-purple">ImageMagick License</span>
+                {expandedLicense === "imagemagick" ? (
+                  <ChevronUp className="w-5 h-5 text-dark-purple" />
+                ) : (
+                  <ChevronDown className="w-5 h-5 text-dark-purple" />
+                )}
+              </button>
+              {expandedLicense === "imagemagick" && (
+                <div className="p-4 bg-light-bg rounded-xl text-xs text-secondary whitespace-pre-wrap font-mono max-h-96 overflow-y-auto">
+                  {IMAGEMAGICK_LICENSE}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="h-screen bg-light-bg flex flex-col overflow-hidden relative">
+        {/* Close Button */}
+        <button
+          onClick={onAllToolsReady}
+          className="absolute top-6 right-6 z-50 w-10 h-10 bg-white hover:bg-pink rounded-lg flex items-center justify-center transition-colors shadow-lg border-2 border-dark-purple"
+          aria-label="Close Tools Manager"
+          title="Back to main app"
+        >
+          <X className="w-6 h-6 text-dark-purple" />
+        </button>
+
+        {/* Main Content Area */}
+        <div className="flex-1 overflow-y-auto overflow-x-hidden">
+          <div className="p-6 flex items-center justify-center min-h-full pt-20">
+            <div className="max-w-2xl w-full space-y-6">
+              {/* Header */}
+              <div className="text-center space-y-2">
+                <h1 className="text-3xl font-bold text-dark-purple">
+                  Welcome to ConvertSave!
+                </h1>
+                <p className="text-lg text-secondary">
+                  To get started, we need to download a few conversion tools.
+                </p>
               </div>
-            ) : null}
 
-            {/* Tool Cards */}
-            <div className="space-y-4">
-              {/* FFmpeg Card */}
-              <div className="bg-white border-2 border-light-purple rounded-xl p-6">
-                <div className="flex items-center justify-between">
-                  <div className="flex-1">
-                    <div className="flex items-center space-x-3 flex-wrap">
-                      <h3 className="text-xl font-bold text-dark-purple">
-                        FFmpeg
-                      </h3>
-                      {toolStatus.ffmpeg.available ? (
-                        <>
-                          <div className="flex items-center space-x-1 bg-aquamarine text-dark-purple px-3 py-1 rounded-full text-sm font-bold">
+              {/* Tool Cards */}
+              <div className="space-y-4">
+                {/* FFmpeg Card */}
+                <div className="bg-white border-2 border-dark-purple rounded-xl p-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex-1">
+                      <div className="flex items-center space-x-3 flex-wrap mb-2">
+                        <h3 className="text-xl font-bold text-dark-purple">
+                          FFmpeg
+                        </h3>
+                        {toolStatus.ffmpeg.available ? (
+                          <div className="flex items-center space-x-1 bg-mint-accent text-dark-purple px-3 py-1 rounded-full text-sm font-bold">
                             <Check className="w-4 h-4" />
                             <span>Ready</span>
                           </div>
-                          {updateStatus?.ffmpeg?.updateAvailable && (
-                            <div className="flex items-center space-x-1 bg-yellow text-dark-purple px-3 py-1 rounded-full text-sm font-bold">
-                              <AlertCircle className="w-4 h-4" />
-                              <span>Update Available</span>
-                            </div>
-                          )}
-                        </>
-                      ) : (
-                        <div className="flex items-center space-x-1 bg-yellow text-dark-purple px-3 py-1 rounded-full text-sm font-bold">
-                          <X className="w-4 h-4" />
-                          <span>Not Available</span>
-                        </div>
-                      )}
-                    </div>
-                    <p className="text-light-purple mt-2">
-                      For converting images, videos, and audio files
-                    </p>
-                    {toolStatus.ffmpeg.available && toolStatus.ffmpeg.path && (
-                      <p className="text-xs text-light-purple mt-1 font-mono">
-                        {toolStatus.ffmpeg.path}
-                      </p>
-                    )}
-                    {updateStatus?.ffmpeg?.currentVersion && (
-                      <p className="text-xs text-light-purple mt-1">
-                        Version: {updateStatus.ffmpeg.currentVersion}
-                        {updateStatus.ffmpeg.latestVersion && 
-                         updateStatus.ffmpeg.updateAvailable && (
-                          <span className="text-dark-purple font-bold ml-1 bg-yellow px-2 py-0.5 rounded">
-                            → {updateStatus.ffmpeg.latestVersion}
-                          </span>
+                        ) : (
+                          <div className="flex items-center space-x-1 bg-pink-accent text-dark-purple px-3 py-1 rounded-full text-sm font-bold">
+                            <X className="w-4 h-4" />
+                            <span>Not Found</span>
+                          </div>
                         )}
+                      </div>
+                      <p className="text-secondary">
+                        Used to convert most images formats.
                       </p>
+                    </div>
+                    {!toolStatus.ffmpeg.available && (
+                      <button
+                        onClick={() => downloadTool("ffmpeg")}
+                        disabled={downloadingTools.has("ffmpeg")}
+                        className="btn-chunky bg-mint-accent text-dark-purple px-6 py-3 flex items-center space-x-2"
+                      >
+                        {downloadingTools.has("ffmpeg") ? (
+                          <>
+                            <Loader className="w-5 h-5 animate-spin" />
+                            <span>Download</span>
+                          </>
+                        ) : (
+                          <span>Download</span>
+                        )}
+                      </button>
                     )}
                   </div>
-                  {(!toolStatus.ffmpeg.available || updateStatus?.ffmpeg?.updateAvailable) && (
-                    <button
-                      onClick={() => downloadTool("ffmpeg")}
-                      disabled={downloadingTools.has("ffmpeg")}
-                      className={`btn-chunky ${updateStatus?.ffmpeg?.updateAvailable ? 'bg-yellow' : 'bg-aquamarine'} text-dark-purple px-6 py-3 flex items-center space-x-2`}
-                    >
-                      {downloadingTools.has("ffmpeg") ? (
-                        <>
-                          <Loader className="w-5 h-5 animate-spin" />
-                          <span>Downloading...</span>
-                        </>
-                      ) : (
-                        <>
-                          <Download className="w-5 h-5" />
-                          <span>{updateStatus?.ffmpeg?.updateAvailable ? 'Update' : 'Download'}</span>
-                        </>
+                  
+                  {/* Advanced Section */}
+                  <button
+                    onClick={() => setFfmpegAdvancedOpen(!ffmpegAdvancedOpen)}
+                    className="flex items-center space-x-2 text-dark-purple font-bold hover:text-secondary transition-colors"
+                  >
+                    <span>Advanced</span>
+                    {ffmpegAdvancedOpen ? (
+                      <ChevronUp className="w-4 h-4" />
+                    ) : (
+                      <ChevronDown className="w-4 h-4" />
+                    )}
+                  </button>
+                  
+                  {ffmpegAdvancedOpen && (
+                    <div className="mt-4 p-4 bg-light-bg rounded-lg space-y-3">
+                      <p className="text-sm text-secondary">
+                        You can also download FFmpeg directly and select a custom path.
+                      </p>
+                      <div className="flex space-x-2">
+                        <button className="btn-chunky bg-white border-2 border-dark-purple text-dark-purple px-4 py-2 text-sm hover:bg-light-bg">
+                          Select Custom Path
+                        </button>
+                        <button className="btn-chunky bg-white border-2 border-dark-purple text-dark-purple px-4 py-2 text-sm hover:bg-light-bg">
+                          Use Default Path
+                        </button>
+                      </div>
+                      {toolStatus.ffmpeg.path && (
+                        <p className="text-xs text-secondary font-mono mt-2 break-all">
+                          {toolStatus.ffmpeg.path}
+                        </p>
                       )}
-                    </button>
+                    </div>
                   )}
                 </div>
-              </div>
 
               {/* DISABLED: Pandoc functionality temporarily disabled */}
               {/* {/* Pandoc Card */}
@@ -376,202 +450,231 @@ export default function ToolDownloader({
                 </div>
               </div> */}
 
-              {/* ImageMagick Card */}
-              <div className="bg-white border-2 border-light-purple rounded-xl p-6">
-                <div className="flex items-center justify-between">
-                  <div className="flex-1">
-                    <div className="flex items-center space-x-3 flex-wrap">
-                      <h3 className="text-xl font-bold text-dark-purple">
-                        ImageMagick
-                      </h3>
-                      {toolStatus.imagemagick.available ? (
-                        <>
-                          <div className="flex items-center space-x-1 bg-aquamarine text-dark-purple px-3 py-1 rounded-full text-sm font-bold">
+                {/* ImageMagick Card */}
+                <div className="bg-white border-2 border-dark-purple rounded-xl p-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex-1">
+                      <div className="flex items-center space-x-3 flex-wrap mb-2">
+                        <h3 className="text-xl font-bold text-dark-purple">
+                          ImageMagick
+                        </h3>
+                        {toolStatus.imagemagick.available ? (
+                          <div className="flex items-center space-x-1 bg-mint-accent text-dark-purple px-3 py-1 rounded-full text-sm font-bold">
                             <Check className="w-4 h-4" />
                             <span>Ready</span>
                           </div>
-                          {updateStatus?.imagemagick?.updateAvailable && (
-                            <div className="flex items-center space-x-1 bg-yellow text-dark-purple px-3 py-1 rounded-full text-sm font-bold">
-                              <AlertCircle className="w-4 h-4" />
-                              <span>Update Available</span>
-                            </div>
-                          )}
-                        </>
-                      ) : (
-                        <div className="flex items-center space-x-1 bg-yellow text-dark-purple px-3 py-1 rounded-full text-sm font-bold">
-                          <X className="w-4 h-4" />
-                          <span>Not Available</span>
-                        </div>
-                      )}
+                        ) : (
+                          <div className="flex items-center space-x-1 bg-pink-accent text-dark-purple px-3 py-1 rounded-full text-sm font-bold">
+                            <X className="w-4 h-4" />
+                            <span>Not Found</span>
+                          </div>
+                        )}
+                      </div>
+                      <p className="text-secondary">
+                        Adds additional features, including HEIC encoding.
+                      </p>
                     </div>
-                    <p className="text-light-purple mt-2">
-                      Used for advanced image processing and HEIC/HEIF encoding
-                    </p>
-                    {toolStatus.imagemagick.available &&
-                      toolStatus.imagemagick.path && (
-                        <p className="text-xs text-light-purple mt-1 font-mono">
+                    {!toolStatus.imagemagick.available && (
+                      <button
+                        onClick={() => downloadTool("imagemagick")}
+                        disabled={downloadingTools.has("imagemagick")}
+                        className="btn-chunky bg-mint-accent text-dark-purple px-6 py-3 flex items-center space-x-2"
+                      >
+                        {downloadingTools.has("imagemagick") ? (
+                          <>
+                            <Loader className="w-5 h-5 animate-spin" />
+                            <span>Download</span>
+                          </>
+                        ) : (
+                          <span>Download</span>
+                        )}
+                      </button>
+                    )}
+                  </div>
+                  
+                  {/* Advanced Section */}
+                  <button
+                    onClick={() => setImagemagickAdvancedOpen(!imagemagickAdvancedOpen)}
+                    className="flex items-center space-x-2 text-dark-purple font-bold hover:text-secondary transition-colors"
+                  >
+                    <span>Advanced</span>
+                    {imagemagickAdvancedOpen ? (
+                      <ChevronUp className="w-4 h-4" />
+                    ) : (
+                      <ChevronDown className="w-4 h-4" />
+                    )}
+                  </button>
+                  
+                  {imagemagickAdvancedOpen && (
+                    <div className="mt-4 p-4 bg-light-bg rounded-lg space-y-3">
+                      <p className="text-sm text-secondary">
+                        You can also download ImageMagick directly and select a custom path.
+                      </p>
+                      <div className="flex space-x-2">
+                        <button className="btn-chunky bg-white border-2 border-dark-purple text-dark-purple px-4 py-2 text-sm hover:bg-light-bg">
+                          Select Custom Path
+                        </button>
+                        <button className="btn-chunky bg-white border-2 border-dark-purple text-dark-purple px-4 py-2 text-sm hover:bg-light-bg">
+                          Use Default Path
+                        </button>
+                      </div>
+                      {toolStatus.imagemagick.path && (
+                        <p className="text-xs text-secondary font-mono mt-2 break-all">
                           {toolStatus.imagemagick.path}
                         </p>
                       )}
-                    {updateStatus?.imagemagick?.currentVersion && (
-                      <p className="text-xs text-light-purple mt-1">
-                        Version: {updateStatus.imagemagick.currentVersion}
-                        {updateStatus.imagemagick.latestVersion && 
-                         updateStatus.imagemagick.updateAvailable && (
-                          <span className="text-dark-purple font-bold ml-1 bg-yellow px-2 py-0.5 rounded">
-                            → {updateStatus.imagemagick.latestVersion}
-                          </span>
-                        )}
-                      </p>
-                    )}
-                  </div>
-                  {(!toolStatus.imagemagick.available || updateStatus?.imagemagick?.updateAvailable) && (
-                    <button
-                      onClick={() => downloadTool("imagemagick")}
-                      disabled={downloadingTools.has("imagemagick")}
-                      className={`btn-chunky ${updateStatus?.imagemagick?.updateAvailable ? 'bg-yellow' : 'bg-aquamarine'} text-dark-purple px-6 py-3 flex items-center space-x-2`}
-                    >
-                      {downloadingTools.has("imagemagick") ? (
-                        <>
-                          <Loader className="w-5 h-5 animate-spin" />
-                          <span>Downloading...</span>
-                        </>
-                      ) : (
-                        <>
-                          <Download className="w-5 h-5" />
-                          <span>{updateStatus?.imagemagick?.updateAvailable ? 'Update' : 'Download'}</span>
-                        </>
-                      )}
-                    </button>
+                    </div>
                   )}
                 </div>
               </div>
-            </div>
 
-            {/* Download Progress */}
-            {downloadProgress && downloadProgress.status !== "complete" && (
-              <div className="bg-aquamarine border-2 border-dark-purple rounded-xl p-4">
-                <div className="flex items-center space-x-3">
-                  <Loader className="w-5 h-5 animate-spin text-dark-purple" />
-                  <div>
-                    <p className="font-bold text-dark-purple capitalize">
-                      {downloadProgress.status}
-                    </p>
-                    <p className="text-sm text-dark-purple">
-                      {downloadProgress.message}
-                    </p>
+              {/* Continue Button */}
+              {coreToolsReady && (
+                <button
+                  onClick={onAllToolsReady}
+                  className="btn-chunky bg-mint-accent text-dark-purple px-8 py-4 text-lg w-full"
+                >
+                  Continue
+                </button>
+              )}
+
+              {/* Download Progress */}
+              {downloadProgress && downloadProgress.status !== "complete" && (
+                <div className="bg-mint-accent border-2 border-dark-purple rounded-xl p-4">
+                  <div className="flex items-center space-x-3">
+                    <Loader className="w-5 h-5 animate-spin text-dark-purple" />
+                    <div>
+                      <p className="font-bold text-dark-purple capitalize">
+                        {downloadProgress.status}
+                      </p>
+                      <p className="text-sm text-dark-purple">
+                        {downloadProgress.message}
+                      </p>
+                    </div>
                   </div>
                 </div>
-              </div>
-            )}
+              )}
 
-            {/* Success Message */}
-            {successMessage && (
-              <div className="bg-aquamarine border-2 border-dark-purple rounded-xl p-4">
-                <div className="flex items-center space-x-3">
-                  <Check className="w-5 h-5 text-dark-purple" />
-                  <p className="font-bold text-dark-purple">{successMessage}</p>
+              {/* Success Message */}
+              {successMessage && (
+                <div className="bg-mint-accent border-2 border-dark-purple rounded-xl p-4">
+                  <div className="flex items-center space-x-3">
+                    <Check className="w-5 h-5 text-dark-purple" />
+                    <p className="font-bold text-dark-purple">{successMessage}</p>
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
 
-            {/* Error Message */}
-            {error && (
-              <div className="bg-pink border-2 border-dark-purple rounded-xl p-4">
-                <div className="flex items-center space-x-3">
-                  <X className="w-5 h-5 text-dark-purple" />
-                  <p className="font-bold text-dark-purple">{error}</p>
+              {/* Error Message */}
+              {error && (
+                <div className="bg-pink-accent border-2 border-dark-purple rounded-xl p-4">
+                  <div className="flex items-center space-x-3">
+                    <X className="w-5 h-5 text-dark-purple" />
+                    <p className="font-bold text-dark-purple">{error}</p>
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
 
-            {/* License Notice */}
-            <div className="bg-light-grey rounded-xl p-4 text-sm text-light-purple space-y-2">
-              <p className="font-bold text-dark-purple">License Information</p>
-              <p>
-                <strong>FFmpeg</strong> is licensed under the{" "}
-                <a
-                  href="https://www.gnu.org/licenses/gpl-3.0.html"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-dark-purple underline hover:text-aquamarine"
+              {/* License & Attribution Section */}
+              <div className="space-y-2">
+                <button
+                  onClick={() => setLicenseAttributionOpen(!licenseAttributionOpen)}
+                  className="w-full p-4 bg-lighter-bg rounded-xl flex items-center justify-between hover:bg-muted-bg transition-colors"
                 >
-                  GNU GPL v3
-                </a>
-                . We download it from official sources.
-              </p>
-              {/* DISABLED: Pandoc functionality temporarily disabled */}
-              {/* <p>
-                <strong>Pandoc</strong> is licensed under the{" "}
-                <a
-                  href="https://www.gnu.org/licenses/gpl-2.0.html"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-dark-purple underline hover:text-aquamarine"
+                  <span className="font-bold text-dark-purple">License & Attribution</span>
+                  {licenseAttributionOpen ? (
+                    <ChevronUp className="w-5 h-5 text-dark-purple" />
+                  ) : (
+                    <ChevronDown className="w-5 h-5 text-dark-purple" />
+                  )}
+                </button>
+                
+                {licenseAttributionOpen && (
+                  <div className="p-6 bg-lighter-bg rounded-xl space-y-6 text-sm text-secondary">
+                    <p>
+                      The following tools are downloaded separately and from official sources in order to comply with their respective licenses.
+                    </p>
+
+                    <div className="space-y-3">
+                      <h3 className="font-bold text-dark-purple">FFmpeg</h3>
+                      <p>
+                        FFmpeg is the leading multimedia framework, able to decode, encode, transcode, mux, demux, stream, filter and play pretty much anything that humans and machines have created.
+                      </p>
+                      <p>
+                        FFmpeg is licensed under the GNU Lesser General Public License (LGPL) version 2.1 or later. However, FFmpeg incorporates several optional parts and optimizations that are covered by the GNU General Public License (GPL) version 2 or later. For more information, visit{" "}
+                        <a
+                          href="https://www.ffmpeg.org/legal.html"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-blue-accent underline hover:text-dark-purple"
+                        >
+                          https://www.ffmpeg.org/legal.html
+                        </a>
+                        .
+                      </p>
+                      <p>
+                        FFmpeg is a trademark of Fabrice Bellard, originator of the FFmpeg project.
+                      </p>
+                    </div>
+
+                    <div className="space-y-3">
+                      <h3 className="font-bold text-dark-purple">ImageMagick</h3>
+                      <p>
+                        ImageMagick is a free, open-source software suite, used for editing and manipulating digital images.
+                      </p>
+                      <p>
+                        ImageMagick is licensed under the ImageMagick License. For more information, visit{" "}
+                        <a
+                          href="https://imagemagick.org/script/license.php"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-blue-accent underline hover:text-dark-purple"
+                        >
+                          https://imagemagick.org/script/license.php
+                        </a>
+                        .
+                      </p>
+                      <p>
+                        Copyright © 1999 ImageMagick Studio LLC, a non-profit organization dedicated to making software imaging solutions freely available.
+                      </p>
+                    </div>
+
+                    <button
+                      onClick={() => setShowLicensesModal(true)}
+                      className="btn-chunky bg-white border-2 border-dark-purple text-dark-purple px-6 py-3 hover:bg-light-bg"
+                    >
+                      Licenses
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* About Section */}
+              <div className="space-y-2">
+                <button
+                  onClick={() => setAboutOpen(!aboutOpen)}
+                  className="w-full p-4 bg-lighter-bg rounded-xl flex items-center justify-between hover:bg-muted-bg transition-colors"
                 >
-                  GNU GPL v2+
-                </a>
-                .
-              </p> */}
-              <p>
-                <strong>ImageMagick</strong> is licensed under the{" "}
-                <a
-                  href="https://imagemagick.org/script/license.php"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-dark-purple underline hover:text-aquamarine"
-                >
-                  Apache 2.0 License
-                </a>
-                .
-              </p>
-              <p className="text-xs">
-                These tools are downloaded on first use to comply with their
-                respective licenses and to keep the application size small.
-              </p>
+                  <span className="font-bold text-dark-purple">About</span>
+                  {aboutOpen ? (
+                    <ChevronUp className="w-5 h-5 text-dark-purple" />
+                  ) : (
+                    <ChevronDown className="w-5 h-5 text-dark-purple" />
+                  )}
+                </button>
+                
+                {aboutOpen && (
+                  <div className="p-6 bg-lighter-bg rounded-xl text-sm text-secondary">
+                    <p>
+                      ConvertSave helps you quickly convert images locally on your computer.
+                    </p>
+                  </div>
+                )}
+              </div>
             </div>
-
-            {/* Continue Button */}
-            {allToolsReady ? (
-              <div className="text-center space-y-3">
-                <button
-                  onClick={onAllToolsReady}
-                  className="btn-chunky bg-aquamarine text-dark-purple px-8 py-4 text-lg w-full"
-                >
-                  Continue to ConvertSave
-                </button>
-                <p className="text-sm text-light-purple">
-                  All tools are ready! You can now convert files.
-                </p>
-              </div>
-            ) : coreToolsReady ? (
-              <div className="text-center space-y-3">
-                <button
-                  onClick={onAllToolsReady}
-                  className="btn-chunky bg-aquamarine text-dark-purple px-8 py-4 text-lg w-full"
-                >
-                  Continue to ConvertSave
-                </button>
-                <p className="text-sm text-light-purple">
-                  Core tools ready! ImageMagick (optional) can be added later.
-                </p>
-              </div>
-            ) : (
-              <div className="text-center space-y-3">
-                <button
-                  onClick={onAllToolsReady}
-                  className="btn-chunky bg-light-grey text-dark-purple px-8 py-3 text-base w-full hover:bg-tan"
-                >
-                  Skip for Now
-                </button>
-                <p className="text-xs text-light-purple">
-                  FFmpeg is required for most conversions.
-                </p>
-              </div>
-            )}
           </div>
         </div>
       </div>
-    </div>
+    </>
   );
 }

@@ -1,14 +1,9 @@
 import { useState, useEffect, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
-// import { getCurrentWindow } from "@tauri-apps/api/window"; // Uncomment for custom title bar
 import { listen } from "@tauri-apps/api/event";
 import { open } from "@tauri-apps/plugin-dialog";
-import FileConversionRow from "./components/FileConversionRow";
 import ToolDownloader from "./components/ToolDownloader";
-import {
-  FileInfo,
-  type BatchConversionSettings as BatchSettings,
-} from "./types";
+import { FileInfo } from "./types";
 import { ChevronDown } from "lucide-react";
 
 interface ToolStatus {
@@ -29,7 +24,7 @@ interface ToolStatus {
 
 function App() {
   const [selectedFiles, setSelectedFiles] = useState<FileInfo[]>([]);
-  const [batchSettings, setBatchSettings] = useState<BatchSettings>({});
+  const [selectedFormat, setSelectedFormat] = useState<string>("jpg");
   const [advancedOptions] = useState<string>("");
   const [outputDirectory] = useState<string>("");
   const [isConverting, setIsConverting] = useState(false);
@@ -39,19 +34,11 @@ function App() {
     message: string;
     outputPath?: string;
   } | null>(null);
-  // const [currentPlatform, setCurrentPlatform] = useState<string>("windows"); // Uncomment for custom title bar
-  const [isIndividualSettingsExpanded, setIsIndividualSettingsExpanded] =
-    useState(false);
   const [toolsReady, setToolsReady] = useState<boolean | null>(null);
   const [showToolManager, setShowToolManager] = useState(false);
-  const [showFormatSelector, setShowFormatSelector] = useState(false);
-  const [activeTab, setActiveTab] = useState<string>("");
-  const [availableFormats, setAvailableFormats] = useState<
-    Record<string, any[]>
-  >({});
+  const [availableFormats, setAvailableFormats] = useState<string[]>([]);
   const [isDraggingOver, setIsDraggingOver] = useState(false);
   const isProcessingDrop = useRef(false);
-  const formatSelectorRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     // ========== PLATFORM DETECTION (COMMENTED OUT FOR NATIVE DECORATIONS) ==========
@@ -181,57 +168,23 @@ function App() {
     };
   }, []);
 
-  // Close format selector when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (
-        formatSelectorRef.current &&
-        !formatSelectorRef.current.contains(event.target as Node)
-      ) {
-        setShowFormatSelector(false);
-      }
-    };
-
-    if (showFormatSelector) {
-      document.addEventListener("mousedown", handleClickOutside);
-    }
-
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-    };
-  }, [showFormatSelector]);
-
-  // Update active tab when files change
-  useEffect(() => {
-    if (selectedFiles.length > 0 && !activeTab) {
-      // Set first extension as active tab
-      const firstExtension = selectedFiles[0].extension.toLowerCase();
-      setActiveTab(firstExtension);
-    }
-  }, [selectedFiles, activeTab]);
-
-  // Load available formats for active tab
+  // Load all available formats on mount
   useEffect(() => {
     const loadFormats = async () => {
-      if (!activeTab || !selectedFiles.length) return;
-
       try {
-        const formats = await invoke<any[]>("get_available_formats", {
-          inputExtension: activeTab,
-        });
-        setAvailableFormats((prev) => ({
-          ...prev,
-          [activeTab]: formats,
-        }));
+        // Get all common image formats
+        const commonFormats = [
+          "jpg", "jpeg", "png", "gif", "bmp", "webp", "tiff", "ico",
+          "heic", "heif", "avif", "svg"
+        ];
+        setAvailableFormats(commonFormats);
       } catch (error) {
         console.error("Failed to load formats:", error);
       }
     };
 
-    if (activeTab && !availableFormats[activeTab]) {
-      loadFormats();
-    }
-  }, [activeTab, selectedFiles, availableFormats]);
+    loadFormats();
+  }, []);
 
   const checkToolsStatus = async () => {
     try {
@@ -252,113 +205,67 @@ function App() {
     checkToolsStatus();
   };
 
-  // Update batch settings when files change
-  useEffect(() => {
-    const newBatchSettings: BatchSettings = {};
-
-    // Group files by extension and check for mixed formats
-    const filesByExtension = selectedFiles.reduce((acc, file) => {
-      const ext = file.extension.toLowerCase();
-      if (!acc[ext]) {
-        acc[ext] = [];
-      }
-      acc[ext].push(file);
-      return acc;
-    }, {} as Record<string, FileInfo[]>);
-
-    Object.entries(filesByExtension).forEach(([extension, extensionFiles]) => {
-      const formats = extensionFiles
-        .map((f) => f.selectedFormat)
-        .filter((f) => f !== undefined);
-
-      if (formats.length === 0) {
-        // No formats selected yet
-        return;
-      }
-
-      const uniqueFormats = Array.from(new Set(formats));
-
-      if (uniqueFormats.length === 1) {
-        // All files have the same format
-        newBatchSettings[extension] = {
-          format: uniqueFormats[0]!,
-          isMixed: false,
-        };
-      } else {
-        // Mixed formats
-        newBatchSettings[extension] = {
-          format: uniqueFormats[0]!, // Use first format as default
-          isMixed: true,
-        };
-      }
-    });
-
-    setBatchSettings(newBatchSettings);
-  }, [selectedFiles]);
 
   const removeFile = (index: number) => {
     setSelectedFiles((prev) => prev.filter((_, i) => i !== index));
   };
 
-  const handleFileFormatChange = (index: number, format: string) => {
-    setSelectedFiles((prev) =>
-      prev.map((file, i) =>
-        i === index ? { ...file, selectedFormat: format } : file
-      )
-    );
-    // Batch settings will be updated automatically via useEffect
-  };
-
-  const handleBatchSettingChange = (inputExtension: string, format: string) => {
-    // Update all files of this extension
-    setSelectedFiles((prev) =>
-      prev.map((file) =>
-        file.extension.toLowerCase() === inputExtension.toLowerCase()
-          ? { ...file, selectedFormat: format }
-          : file
-      )
-    );
-    // Update batch settings
-    setBatchSettings((prev) => ({
-      ...prev,
-      [inputExtension.toLowerCase()]: {
-        format: format,
-        isMixed: false,
-      },
-    }));
+  const clearAllFiles = () => {
+    setSelectedFiles([]);
+    setConversionResult(null);
   };
 
   const handleConvert = async () => {
-    // Check if all files have selected formats
-    const filesWithFormats = selectedFiles.filter(
-      (file) => file.selectedFormat
-    );
-    if (filesWithFormats.length === 0) return;
+    if (selectedFiles.length === 0 || !selectedFormat) return;
 
     setIsConverting(true);
     setConversionProgress(0);
     setConversionResult(null);
 
     try {
+      let successCount = 0;
+      let failureCount = 0;
       let lastOutputPath = "";
-      // Convert each file with its selected format
-      for (let i = 0; i < filesWithFormats.length; i++) {
-        const file = filesWithFormats[i];
-        const result = await invoke<string>("convert_file", {
-          inputPath: file.path,
-          outputFormat: file.selectedFormat!,
-          outputDirectory: outputDirectory || undefined,
-          advancedOptions: advancedOptions || undefined,
-        });
-        lastOutputPath = result;
-        setConversionProgress(((i + 1) / filesWithFormats.length) * 100);
+      
+      // Convert each file to the selected format
+      for (let i = 0; i < selectedFiles.length; i++) {
+        const file = selectedFiles[i];
+        
+        try {
+          const result = await invoke<string>("convert_file", {
+            inputPath: file.path,
+            outputFormat: selectedFormat,
+            outputDirectory: outputDirectory || undefined,
+            advancedOptions: advancedOptions || undefined,
+          });
+          lastOutputPath = result;
+          successCount++;
+        } catch (error) {
+          console.error(`Failed to convert ${file.name}:`, error);
+          failureCount++;
+        }
+        
+        setConversionProgress(((i + 1) / selectedFiles.length) * 100);
       }
 
-      setConversionResult({
-        success: true,
-        message: `Successfully converted ${selectedFiles.length} file(s)!`,
-        outputPath: lastOutputPath,
-      });
+      if (failureCount === 0) {
+        setConversionResult({
+          success: true,
+          message: `Successfully converted ${successCount} file(s) to ${selectedFormat.toUpperCase()}!`,
+          outputPath: lastOutputPath,
+        });
+      } else if (successCount > 0) {
+        setConversionResult({
+          success: true,
+          message: `Converted ${successCount} file(s), ${failureCount} failed`,
+          outputPath: lastOutputPath,
+        });
+      } else {
+        setConversionResult({
+          success: false,
+          message: `Failed to convert all files. Some formats may not support conversion to ${selectedFormat.toUpperCase()}.`,
+        });
+      }
     } catch (error) {
       setConversionResult({
         success: false,
@@ -687,35 +594,23 @@ function App() {
   // Show loading state while checking
   if (toolsReady === null) {
     return (
-      <div className="h-screen bg-off-white flex items-center justify-center">
+      <div className="h-screen bg-light-bg flex items-center justify-center">
         <div className="text-center space-y-4">
-          <div className="w-16 h-16 border-4 border-aquamarine border-t-transparent rounded-full animate-spin mx-auto"></div>
+          <div className="w-16 h-16 border-4 border-mint-accent border-t-transparent rounded-full animate-spin mx-auto"></div>
           <p className="text-dark-purple font-bold">Loading ConvertSave...</p>
         </div>
       </div>
     );
   }
 
-  // Group files by extension for tabs
-  const filesByExtension = selectedFiles.reduce((acc, file) => {
-    const ext = file.extension.toLowerCase();
-    if (!acc[ext]) {
-      acc[ext] = [];
-    }
-    acc[ext].push(file);
-    return acc;
-  }, {} as Record<string, FileInfo[]>);
-
-  const extensions = Object.keys(filesByExtension);
-
   return (
-    <div className="h-screen bg-off-white flex flex-col overflow-hidden relative">
+    <div className="h-screen bg-light-bg flex flex-col overflow-hidden relative">
       {/* Drag Overlay - Shows when dragging files over window */}
       {isDraggingOver && (
-        <div className="absolute inset-0 z-[100] bg-aquamarine bg-opacity-20 border-4 border-dashed border-aquamarine flex items-center justify-center pointer-events-none">
+        <div className="absolute inset-0 z-[100] bg-mint-accent bg-opacity-20 border-4 border-dashed border-mint-accent flex items-center justify-center pointer-events-none">
           <div className="bg-white rounded-2xl p-8 shadow-2xl">
             <div className="flex flex-col items-center space-y-4">
-              <div className="w-20 h-20 bg-aquamarine rounded-full flex items-center justify-center animate-bounce">
+              <div className="w-20 h-20 bg-mint-accent rounded-full flex items-center justify-center animate-bounce">
                 <svg
                   width="48"
                   height="48"
@@ -741,7 +636,7 @@ function App() {
               <h2 className="text-2xl font-bold text-dark-purple">
                 Drop files here
               </h2>
-              <p className="text-light-purple">
+              <p className="text-secondary">
                 Release to add files for conversion
               </p>
             </div>
@@ -793,153 +688,43 @@ function App() {
       {/* ========== END CUSTOM TITLE BAR ========== */}
 
       {/* Toolbar */}
-      <div className="bg-white border-b border-light-grey px-6 py-3 flex items-center justify-between flex-shrink-0 relative">
-        {/* Left side - Tools button */}
+      <div className="bg-light-bg p-6 flex items-center justify-between flex-shrink-0">
+        {/* Left side - Settings button */}
         <button
           onClick={() => setShowToolManager(true)}
-          className="btn-chunky bg-light-purple text-dark-purple px-4 py-2 hover:bg-opacity-80"
+          className="btn-chunky bg-white border-2 border-dark-purple text-dark-purple px-6 py-2 hover:bg-light-bg"
           title="Manage conversion tools"
         >
-          Tools
+          Settings
         </button>
 
-        {/* Right side - Select output and Convert buttons */}
-        <div className="flex items-center space-x-3" ref={formatSelectorRef}>
+        {/* Right side - Format dropdown and Convert button */}
+        <div className="flex items-center space-x-3">
+          <span className="text-secondary font-normal">Select Output:</span>
+          
           <div className="relative">
-            <button
-              onClick={() => setShowFormatSelector(!showFormatSelector)}
-              disabled={selectedFiles.length === 0}
-              className={`btn-chunky px-4 py-2 ${
-                selectedFiles.length === 0
-                  ? "bg-light-grey text-light-purple cursor-not-allowed"
-                  : showFormatSelector
-                  ? "bg-aquamarine text-dark-purple"
-                  : "bg-aquamarine text-dark-purple hover:bg-opacity-80"
-              }`}
-              title={
-                selectedFiles.length === 0
-                  ? "Add files to select output format"
-                  : "Select output format for all files"
-              }
+            <select
+              value={selectedFormat}
+              onChange={(e) => setSelectedFormat(e.target.value)}
+              className="btn-chunky bg-white border-2 border-dark-purple text-dark-purple px-4 py-2 pr-10 appearance-none cursor-pointer hover:bg-light-bg focus:outline-none focus:ring-2 focus:ring-mint-accent"
             >
-              Select Output
-              <ChevronDown
-                className={`inline-block w-4 h-4 ml-2 transition-transform duration-200 ${
-                  showFormatSelector ? "rotate-180" : ""
-                }`}
-              />
-            </button>
-
-            {/* Format Selector Dropdown */}
-            {showFormatSelector && selectedFiles.length > 0 && (
-              <div className="absolute top-full right-0 mt-2 w-[600px] bg-white border-2 border-dark-purple rounded-xl shadow-2xl z-[100] overflow-hidden">
-                {/* Tabs */}
-                <div className="flex border-b border-light-grey bg-light-grey overflow-x-auto">
-                  {extensions.map((ext) => (
-                    <button
-                      key={ext}
-                      onClick={() => setActiveTab(ext)}
-                      className={`px-6 py-3 font-bold text-sm whitespace-nowrap transition-colors ${
-                        activeTab === ext
-                          ? "bg-white text-dark-purple border-b-2 border-aquamarine"
-                          : "text-light-purple hover:text-dark-purple"
-                      }`}
-                    >
-                      {ext.toUpperCase()} ({filesByExtension[ext].length})
-                    </button>
-                  ))}
-                </div>
-
-                {/* Tab Content */}
-                <div className="p-6 max-h-[400px] overflow-y-auto">
-                  {activeTab && availableFormats[activeTab] ? (
-                    <div className="space-y-4">
-                      <h3 className="text-lg font-bold text-dark-purple">
-                        Convert to:
-                      </h3>
-                      <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-5 gap-2">
-                        {availableFormats[activeTab].map((format: any) => {
-                          const isSelected =
-                            batchSettings[activeTab]?.format === format.format;
-
-                          return (
-                            <button
-                              key={format.format}
-                              onClick={() => {
-                                handleBatchSettingChange(
-                                  activeTab,
-                                  format.format
-                                );
-                                // Add small delay before closing to show selection feedback
-                                setTimeout(() => {
-                                  setShowFormatSelector(false);
-                                }, 200);
-                              }}
-                              className={`
-                                btn-chunky relative p-3 text-center transition-all duration-200
-                                ${
-                                  isSelected
-                                    ? "bg-aquamarine"
-                                    : "bg-light-grey hover:bg-tan"
-                                }
-                                ${
-                                  isSelected
-                                    ? "text-dark-purple"
-                                    : "text-secondary hover:text-dark-purple"
-                                }
-                              `}
-                            >
-                              {isSelected && (
-                                <svg
-                                  className="absolute top-0.5 right-0.5 w-4 h-4"
-                                  viewBox="0 0 24 24"
-                                  fill="currentColor"
-                                >
-                                  <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z" />
-                                </svg>
-                              )}
-                              <p className="font-bold text-sm uppercase">
-                                {format.format}
-                              </p>
-                              <p className="text-xs mt-0.5 opacity-75">
-                                {format.display_name}
-                              </p>
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="text-center py-8">
-                      <p className="text-secondary">Loading formats...</p>
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
+              {availableFormats.map((format) => (
+                <option key={format} value={format}>
+                  {format.toUpperCase()}
+                </option>
+              ))}
+            </select>
+            <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-dark-purple pointer-events-none" />
           </div>
 
           <button
             onClick={handleConvert}
-            disabled={
-              selectedFiles.length === 0 ||
-              !selectedFiles.some((f) => f.selectedFormat) ||
-              isConverting
-            }
-            className={`btn-chunky px-6 py-2 ${
-              selectedFiles.length === 0 ||
-              !selectedFiles.some((f) => f.selectedFormat) ||
-              isConverting
-                ? "bg-light-grey text-light-purple cursor-not-allowed"
-                : "bg-pink text-dark-purple hover:bg-opacity-80"
+            disabled={selectedFiles.length === 0 || isConverting}
+            className={`btn-chunky px-8 py-2 ${
+              selectedFiles.length === 0 || isConverting
+                ? "bg-lighter-bg text-secondary cursor-not-allowed"
+                : "bg-mint-accent text-dark-purple hover:bg-opacity-80"
             }`}
-            title={
-              selectedFiles.length === 0
-                ? "Add files to convert"
-                : !selectedFiles.some((f) => f.selectedFormat)
-                ? "Select output format for files"
-                : "Convert files"
-            }
           >
             {isConverting ? "Converting..." : "Convert"}
           </button>
@@ -951,22 +736,22 @@ function App() {
         <div
           className={`${
             selectedFiles.length === 0
-              ? "h-full flex flex-col p-6"
-              : "p-6 space-y-6"
+              ? "h-full flex flex-col px-6 pb-6"
+              : "px-6 pb-6 space-y-6"
           }`}
         >
           {/* Show drag zone when no files are selected, or a smaller version when files are present */}
           {selectedFiles.length === 0 ? (
             /* Main Drop Zone - Full Size */
-            <div className="flex-1 border-2 border-dashed border-light-purple rounded-xl p-16 text-center bg-white flex items-center justify-center">
+            <div className="flex-1 border-2 border-dashed border-secondary rounded-xl p-16 text-center bg-lighter-bg flex items-center justify-center">
               <div className="space-y-6">
-                <div className="w-20 h-20 mx-auto bg-light-grey rounded-lg flex items-center justify-center">
+                <div className="w-20 h-20 mx-auto bg-muted-bg rounded-lg flex items-center justify-center">
                   <svg
                     width="40"
                     height="40"
                     viewBox="0 0 40 40"
                     fill="none"
-                    className="text-light-purple"
+                    className="text-secondary"
                   >
                     <rect
                       x="5"
@@ -993,31 +778,31 @@ function App() {
                 </div>
                 <div className="space-y-3">
                   <h2 className="text-2xl font-bold text-dark-purple">
-                    Drop your files here to convert
+                    Drop your files here to convert.
                   </h2>
-                  <p className="text-lg text-light-purple">
-                    Support for images, videos, audio, and documents
+                  <p className="text-lg text-secondary">
+                    Supports most common image filetypes.
                   </p>
                   <button
                     onClick={handleBrowseFiles}
-                    className="btn-chunky bg-aquamarine text-dark-purple px-8 py-3 text-lg hover:bg-opacity-80"
+                    className="btn-chunky bg-mint-accent text-dark-purple px-8 py-3 text-lg hover:bg-opacity-80"
                   >
-                    Choose Files
+                    Browse
                   </button>
                 </div>
               </div>
             </div>
           ) : (
             /* Compact Drop Zone */
-            <div className="border-2 border-dashed border-light-purple rounded-xl p-6 text-center bg-white">
+            <div className="border-2 border-dashed border-secondary rounded-xl p-6 text-center bg-lighter-bg">
               <div className="flex items-center justify-center space-x-4">
-                <div className="w-12 h-12 bg-light-grey rounded-lg flex items-center justify-center">
+                <div className="w-12 h-12 bg-muted-bg rounded-lg flex items-center justify-center">
                   <svg
                     width="24"
                     height="24"
                     viewBox="0 0 24 24"
                     fill="none"
-                    className="text-light-purple"
+                    className="text-secondary"
                   >
                     <rect
                       x="3"
@@ -1043,72 +828,96 @@ function App() {
                   </svg>
                 </div>
                 <div>
-                  <p className="font-bold text-dark-purple">Add more files</p>
+                  <p className="font-bold text-dark-purple">Add more files.</p>
                   <button
                     onClick={handleBrowseFiles}
-                    className="text-sm text-light-purple hover:text-dark-purple underline"
+                    className="text-sm text-dark-purple underline hover:text-secondary font-bold border-2 border-dark-purple rounded-lg px-3 py-1 mt-1"
                   >
-                    Browse files
+                    Browse
                   </button>
                 </div>
               </div>
             </div>
           )}
 
-          {/* Individual File Conversion Options */}
+          {/* File List */}
           {selectedFiles.length > 0 && (
             <div className="space-y-4">
               <div className="flex items-center justify-between">
-                <div>
-                  <h2 className="text-xl font-bold text-primary">
-                    Individual File Settings
-                  </h2>
-                  <p className="text-sm text-secondary">
-                    Customize conversion settings for each file individually
-                  </p>
-                </div>
+                <h2 className="text-xl font-bold text-primary">Images</h2>
                 <button
-                  onClick={() =>
-                    setIsIndividualSettingsExpanded(
-                      !isIndividualSettingsExpanded
-                    )
-                  }
-                  className="btn-chunky bg-light-grey text-dark-purple px-4 py-2 flex items-center space-x-2 hover:bg-tan"
+                  onClick={clearAllFiles}
+                  className="btn-chunky bg-white border-2 border-dark-purple text-dark-purple px-4 py-2 hover:bg-light-bg"
                 >
-                  <span>
-                    {isIndividualSettingsExpanded ? "Hide" : "Show"} Files (
-                    {selectedFiles.length})
-                  </span>
-                  <ChevronDown
-                    className={`w-4 h-4 transition-transform duration-200 ${
-                      isIndividualSettingsExpanded ? "rotate-180" : ""
-                    }`}
-                  />
+                  Clear All
                 </button>
               </div>
 
-              {isIndividualSettingsExpanded && (
-                <div className="space-y-3">
-                  {selectedFiles.map((file, index) => (
-                    <FileConversionRow
-                      key={index}
-                      file={file}
-                      index={index}
-                      onFormatChange={handleFileFormatChange}
-                      onRemove={removeFile}
-                      formatFileSize={formatFileSize}
-                    />
-                  ))}
-                </div>
-              )}
+              <div className="space-y-3">
+                {selectedFiles.map((file, index) => (
+                  <div
+                    key={index}
+                    className="flex items-center justify-between p-4 bg-white border-2 border-dark-purple rounded-xl"
+                  >
+                    <div className="flex items-center space-x-4">
+                      <div className="w-12 h-12 bg-muted-bg rounded-lg flex items-center justify-center overflow-hidden flex-shrink-0">
+                        <svg
+                          width="24"
+                          height="24"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          className="text-secondary"
+                        >
+                          <rect
+                            x="3"
+                            y="6"
+                            width="15"
+                            height="12"
+                            rx="2"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                          />
+                          <circle
+                            cx="7.5"
+                            cy="10.5"
+                            r="1.5"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                          />
+                          <path
+                            d="M15 15l-3-3-4.5 4.5"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                          />
+                        </svg>
+                      </div>
+                      <div className="space-y-1">
+                        <p className="font-bold text-dark-purple">{file.name}</p>
+                        <p className="text-sm text-secondary">
+                          {formatFileSize(file.size)} • {file.extension.toUpperCase()}
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => removeFile(index)}
+                      className="w-8 h-8 flex items-center justify-center rounded-lg border-2 border-dark-purple hover:bg-pink-accent transition-colors flex-shrink-0"
+                      aria-label="Remove file"
+                    >
+                      <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                        <path d="M2 2L14 14M14 2L2 14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                      </svg>
+                    </button>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
 
           {/* Progress Bar */}
           {isConverting && (
-            <div className="w-full bg-light-grey rounded-full h-2">
+            <div className="w-full bg-lighter-bg rounded-full h-2">
               <div
-                className="bg-aquamarine h-2 rounded-full transition-all duration-300"
+                className="bg-mint-accent h-2 rounded-full transition-all duration-300"
                 style={{ width: `${conversionProgress}%` }}
               />
             </div>
@@ -1118,23 +927,23 @@ function App() {
           {conversionResult && (
             <div
               className={`
-              p-4 rounded-xl font-normal text-center space-y-3
+              p-6 rounded-xl font-normal space-y-3
               ${
                 conversionResult.success
-                  ? "bg-aquamarine text-dark-purple"
-                  : "bg-pink text-dark-purple"
+                  ? "bg-mint-accent text-dark-purple"
+                  : "bg-pink-accent text-dark-purple"
               }
             `}
             >
-              <p className="font-bold">{conversionResult.message}</p>
+              <p className="font-bold text-lg">{conversionResult.message}</p>
               {conversionResult.success && conversionResult.outputPath && (
                 <>
-                  <p className="text-sm">
+                  <p className="text-sm break-all">
                     Output: {conversionResult.outputPath}
                   </p>
                   <button
                     onClick={openOutputFolder}
-                    className="btn-chunky bg-dark-purple text-off-white px-4 py-2 text-sm"
+                    className="btn-chunky bg-dark-purple text-white px-6 py-2 text-sm"
                   >
                     Open Output Folder
                   </button>

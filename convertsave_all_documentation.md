@@ -160,26 +160,27 @@ STYLING GUIDELINES: CONVERTSAVE
    - Modern & Clean: A contemporary feel with ample whitespace, clean lines, and a focus on readability.
 
 2. COLOR PALETTE
-   The color palette features a sophisticated mix of deep purples, warm neutrals, and vibrant accent colors.
+   The color palette features a sophisticated mix of muted neutrals and vibrant accent colors.
 
    A. Primary Palette:
-      - Dark Purple: #130D2E (Primary text and strong emphasis)
-      - Light Purple: #C5C2D3 (Secondary text and muted elements)
-      - Light Grey: #F3F3F4 (Borders and dividers)
-      - Off-White: #FFFDF9 (Primary background)
-      - Light Tan: #FFF7EF (Surface/card backgrounds)
-      - Tan: #F9EAD8 (Warm accent backgrounds)
+      - Dark Text: #24262e (Primary text and strong emphasis)
+      - Secondary Text: #919296 (Secondary text and muted elements)
+      - White: #ffffff (Primary background)
+      - Light Background: #f4f1ed (Surface/card backgrounds)
+      - Lighter Background: #e7e3df (Borders and dividers)
+      - Muted Background: #dbd7d5 (Subtle backgrounds)
 
    B. Accent Colors (For buttons and interactive elements):
-      - Pink: #FF80AE (Error states, document formats)
-      - Aquamarine: #32FFB4 (Success states, primary actions)
-      - Yellow: #FFF832 (Warning states, media formats)
+      - Blue: #3562e3 (Primary actions, warning states)
+      - Mint Green: #91f4c2 (Success states, secondary actions)
+      - Pink: #ef87ad (Error states, tertiary actions)
 
    C. Usage Guidelines:
-      - Use Dark Purple for all primary text and headings
-      - Use Light Purple for secondary text, labels, and less prominent UI elements
-      - Off-White serves as the main application background
-      - Light Tan is used for cards and elevated surfaces
+      - Use Dark Text (#24262e) for all primary text and headings
+      - Use Secondary Text (#919296) for secondary text, labels, and less prominent UI elements
+      - White (#ffffff) serves as the main application background
+      - Light Background (#f4f1ed) is used for cards and elevated surfaces
+      - Lighter Background (#e7e3df) is used for borders, dividers, and subtle separations
       - Accent colors are reserved for interactive elements and status indicators
 
 3. TYPOGRAPHY
@@ -207,42 +208,42 @@ STYLING GUIDELINES: CONVERTSAVE
 
    A. Buttons:
       - Appearance: Chunky and prominent with generous padding (py-4 px-8)
-      - Background: Use accent colors (Pink, Aquamarine, Yellow) for primary actions
+      - Background: Use accent colors (Blue #3562e3, Mint Green #91f4c2, Pink #ef87ad) for primary actions
       - Border Radius: Softly rounded corners (rounded-xl)
-      - Drop Shadows: Subtle shadow using Dark Purple at low opacity
+      - Drop Shadows: Subtle shadow using Dark Text (#24262e) at low opacity
       - States:
          - Default: Full color with shadow
          - Hover: Slightly lifted with increased shadow
          - Active: Pressed appearance (no shadow)
-         - Disabled: Reduced opacity with Light Grey background
+         - Disabled: Reduced opacity with Lighter Background (#e7e3df)
 
    B. Drop Zone:
-      - Border: 2px dashed border in Light Purple
-      - Background: Transparent default, Aquamarine/10 on hover
+      - Border: 2px dashed border in Secondary Text (#919296)
+      - Background: Transparent default, Mint Green/10 on hover
       - Padding: Generous (p-12) to create a large target area
       - Border Radius: rounded-xl for consistency
 
    C. Conversion Option Cards:
-      - Background: Light Grey when unselected, accent color when selected
-      - Text: Light Purple when unselected, Dark Purple when selected
+      - Background: Lighter Background (#e7e3df) when unselected, accent color when selected
+      - Text: Secondary Text (#919296) when unselected, Dark Text (#24262e) when selected
       - Padding: p-4 for comfortable touch targets
       - Include format icon or abbreviation prominently
 
    D. Input Fields:
-      - Background: Light Tan
-      - Border: 1px solid Light Grey
-      - Focus: Aquamarine border with subtle glow
-      - Text: Dark Purple
-      - Placeholder: Light Purple
+      - Background: Light Background (#f4f1ed)
+      - Border: 1px solid Lighter Background (#e7e3df)
+      - Focus: Mint Green (#91f4c2) border with subtle glow
+      - Text: Dark Text (#24262e)
+      - Placeholder: Secondary Text (#919296)
 
    E. Advanced Options Section:
-      - Background: Light Grey to indicate secondary importance
+      - Background: Lighter Background (#e7e3df) to indicate secondary importance
       - Collapsible with smooth animation
       - Monospace font for command-line inputs
 
 5. ICONOGRAPHY
    - Style: Simple line icons with 2px stroke weight
-   - Color: Light Purple for inactive, Dark Purple for active
+   - Color: Secondary Text (#919296) for inactive, Dark Text (#24262e) for active
    - Size: 20px for standard UI, 16px for compact areas
 
 6. LAYOUT & SPACING
