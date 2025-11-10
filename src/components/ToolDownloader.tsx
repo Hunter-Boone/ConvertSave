@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { Download, Check, X, Loader, ChevronDown, ChevronUp } from "lucide-react";
+import { Check, X, Loader, ChevronDown, ChevronUp } from "lucide-react";
 import { LGPL_V3_LICENSE, GPL_V3_LICENSE, IMAGEMAGICK_LICENSE } from "../lib/licenses";
 
 interface ToolStatus {
@@ -20,20 +20,6 @@ interface ToolStatus {
   };
 }
 
-interface UpdateInfo {
-  installed: boolean;
-  currentVersion: string | null;
-  updateAvailable: boolean;
-  latestVersion: string | null;
-}
-
-interface UpdateStatus {
-  ffmpeg: UpdateInfo;
-  // DISABLED: Pandoc functionality temporarily disabled
-  // pandoc: UpdateInfo;
-  imagemagick: UpdateInfo;
-}
-
 interface DownloadProgress {
   status: string;
   message: string;
@@ -47,8 +33,6 @@ export default function ToolDownloader({
   onAllToolsReady,
 }: ToolDownloaderProps) {
   const [toolStatus, setToolStatus] = useState<ToolStatus | null>(null);
-  const [updateStatus, setUpdateStatus] = useState<UpdateStatus | null>(null);
-  const [checkingUpdates, setCheckingUpdates] = useState(false);
   const [downloadingTools, setDownloadingTools] = useState<Set<string>>(
     new Set()
   );
@@ -121,28 +105,8 @@ export default function ToolDownloader({
   };
 
   const checkForUpdates = async () => {
-    setCheckingUpdates(true);
-    setError(null);
-    try {
-      const updates = await invoke<UpdateStatus>("check_for_updates");
-      setUpdateStatus(updates);
-      
-      // Show success message if any updates available
-      const hasUpdates = Object.values(updates).some(
-        (tool) => tool.updateAvailable
-      );
-      if (hasUpdates) {
-        setSuccessMessage("Updates available for some tools!");
-        setTimeout(() => setSuccessMessage(null), 3000);
-      } else {
-        setSuccessMessage("All tools are up to date!");
-        setTimeout(() => setSuccessMessage(null), 2500);
-      }
-    } catch (err) {
-      setError(`Failed to check for updates: ${err}`);
-    } finally {
-      setCheckingUpdates(false);
-    }
+    // Update checking functionality temporarily disabled
+    // This function is kept for future use
   };
 
   const downloadTool = async (toolName: string) => {
@@ -189,7 +153,6 @@ export default function ToolDownloader({
   // Core tools required: FFmpeg only (Pandoc disabled). ImageMagick is optional.
   const coreToolsReady =
     toolStatus.ffmpeg.available;
-  const allToolsReady = coreToolsReady && toolStatus.imagemagick.available;
 
   return (
     <>
