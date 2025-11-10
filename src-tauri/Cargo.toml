@@ -39,3 +39,6 @@ tauri-plugin-dialog = "2"
 [features]
 default = ["custom-protocol"]
 custom-protocol = ["tauri/custom-protocol"]
+# Enable Pandoc document conversion support (disabled by default)
+# To enable: cargo build --features pandoc
+pandoc = []

@@ -8,6 +8,14 @@ use dirs;
 use serde_json;
 use tauri::{AppHandle, Emitter, Manager};
 
+// ═══════════════════════════════════════════════════════════════════════════
+// FEATURE TOGGLES - Set to `true` to enable, `false` to disable
+// ═══════════════════════════════════════════════════════════════════════════
+/// Enable Pandoc document conversion support (Markdown, HTML, TXT conversions)
+/// Change this to `true` when you want to re-enable Pandoc functionality
+const ENABLE_PANDOC: bool = false;
+// ═══════════════════════════════════════════════════════════════════════════
+
 // Windows-specific imports to hide console windows
 #[cfg(target_os = "windows")]
 use std::os::windows::process::CommandExt;
@@ -74,20 +82,22 @@ fn get_available_formats(input_extension: String) -> Vec<ConversionOption> {
                 display_name: "PDF Document".to_string(),
                 color: "pink".to_string(),
             });
-            options.push(ConversionOption {
-                format: "epub".to_string(),
-                tool: "pandoc".to_string(),
-                display_name: "E-Book".to_string(),
-                color: "blue".to_string(),
-            });
-            options.push(ConversionOption {
-                format: "txt".to_string(),
-                tool: "pandoc".to_string(),
-                display_name: "Plain Text".to_string(),
-                color: "lavender".to_string(),
-            });
+            if ENABLE_PANDOC {
+                options.push(ConversionOption {
+                    format: "epub".to_string(),
+                    tool: "pandoc".to_string(),
+                    display_name: "E-Book".to_string(),
+                    color: "blue".to_string(),
+                });
+                options.push(ConversionOption {
+                    format: "txt".to_string(),
+                    tool: "pandoc".to_string(),
+                    display_name: "Plain Text".to_string(),
+                    color: "lavender".to_string(),
+                });
+            }
         }
-        "md" | "markdown" => {
+        "md" | "markdown" if ENABLE_PANDOC => {
             // Markdown can convert to many formats via Pandoc
             options.push(ConversionOption {
                 format: "html".to_string(),
@@ -114,7 +124,7 @@ fn get_available_formats(input_extension: String) -> Vec<ConversionOption> {
                 color: "lavender".to_string(),
             });
         }
-        "html" | "htm" => {
+        "html" | "htm" if ENABLE_PANDOC => {
             // HTML can convert via Pandoc
             options.push(ConversionOption {
                 format: "md".to_string(),
@@ -141,7 +151,7 @@ fn get_available_formats(input_extension: String) -> Vec<ConversionOption> {
                 color: "lavender".to_string(),
             });
         }
-        "txt" => {
+        "txt" if ENABLE_PANDOC => {
             // Plain text can convert via Pandoc
             options.push(ConversionOption {
                 format: "md".to_string(),
@@ -641,7 +651,7 @@ fn determine_conversion_tool(input_ext: &str, output_ext: &str) -> Option<&'stat
     } else if image_inputs.contains(&input_ext) && image_outputs_ffmpeg.contains(&output_ext) {
         // Fallback to ffmpeg for formats ImageMagick doesn't support well
         Some("ffmpeg")
-    } else if doc_inputs.contains(&input_ext) && doc_outputs.contains(&output_ext) {
+    } else if ENABLE_PANDOC && doc_inputs.contains(&input_ext) && doc_outputs.contains(&output_ext) {
         Some("pandoc")
     } else if office_inputs.contains(&input_ext) && office_outputs.contains(&output_ext) {
         Some("libreoffice")
@@ -667,7 +677,7 @@ fn get_tool_path(tool_name: &str) -> Result<PathBuf, String> {
                 "ffmpeg"
             }
         }
-        "pandoc" => {
+        "pandoc" if ENABLE_PANDOC => {
             if cfg!(target_os = "windows") {
                 "pandoc.exe"
             } else {
@@ -1120,7 +1130,7 @@ async fn execute_conversion(
             
             command.arg("-y").arg(output_path); // -y to overwrite output file
         }
-        "pandoc" => {
+        "pandoc" if ENABLE_PANDOC => {
             command.arg(input_path).arg("-o").arg(output_path);
             
             // Add advanced options if provided

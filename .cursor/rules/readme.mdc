@@ -1,0 +1,5 @@
+---
+alwaysApply: true
+---
+
+Don't create so many README and .md files. We only want to create them when they're absolutely necessary like the root README

@@ -8,10 +8,11 @@ interface ToolStatus {
     available: boolean;
     path: string | null;
   };
-  pandoc: {
-    available: boolean;
-    path: string | null;
-  };
+  // DISABLED: Pandoc functionality temporarily disabled
+  // pandoc: {
+  //   available: boolean;
+  //   path: string | null;
+  // };
   imagemagick: {
     available: boolean;
     path: string | null;
@@ -27,7 +28,8 @@ interface UpdateInfo {
 
 interface UpdateStatus {
   ffmpeg: UpdateInfo;
-  pandoc: UpdateInfo;
+  // DISABLED: Pandoc functionality temporarily disabled
+  // pandoc: UpdateInfo;
   imagemagick: UpdateInfo;
 }
 
@@ -147,8 +149,9 @@ export default function ToolDownloader({
     try {
       if (toolName === "ffmpeg") {
         await invoke("download_ffmpeg");
-      } else if (toolName === "pandoc") {
-        await invoke("download_pandoc");
+      // DISABLED: Pandoc functionality temporarily disabled
+      // } else if (toolName === "pandoc") {
+      //   await invoke("download_pandoc");
       } else if (toolName === "imagemagick") {
         await invoke("download_imagemagick");
       }
@@ -176,9 +179,9 @@ export default function ToolDownloader({
     );
   }
 
-  // Core tools required: FFmpeg and Pandoc. ImageMagick is optional.
+  // Core tools required: FFmpeg only (Pandoc disabled). ImageMagick is optional.
   const coreToolsReady =
-    toolStatus.ffmpeg.available && toolStatus.pandoc.available;
+    toolStatus.ffmpeg.available;
   const allToolsReady = coreToolsReady && toolStatus.imagemagick.available;
 
   return (
@@ -208,7 +211,7 @@ export default function ToolDownloader({
             </div>
 
             {/* Check For Updates Button */}
-            {toolStatus.ffmpeg.available || toolStatus.pandoc.available || toolStatus.imagemagick.available ? (
+            {toolStatus.ffmpeg.available || toolStatus.imagemagick.available ? (
               <div className="flex justify-center">
                 <button
                   onClick={checkForUpdates}
@@ -302,8 +305,9 @@ export default function ToolDownloader({
                 </div>
               </div>
 
-              {/* Pandoc Card */}
-              <div className="bg-white border-2 border-light-purple rounded-xl p-6">
+              {/* DISABLED: Pandoc functionality temporarily disabled */}
+              {/* {/* Pandoc Card */}
+              {/* <div className="bg-white border-2 border-light-purple rounded-xl p-6">
                 <div className="flex items-center justify-between">
                   <div className="flex-1">
                     <div className="flex items-center space-x-3 flex-wrap">
@@ -370,7 +374,7 @@ export default function ToolDownloader({
                     </button>
                   )}
                 </div>
-              </div>
+              </div> */}
 
               {/* ImageMagick Card */}
               <div className="bg-white border-2 border-light-purple rounded-xl p-6">
@@ -496,7 +500,8 @@ export default function ToolDownloader({
                 </a>
                 . We download it from official sources.
               </p>
-              <p>
+              {/* DISABLED: Pandoc functionality temporarily disabled */}
+              {/* <p>
                 <strong>Pandoc</strong> is licensed under the{" "}
                 <a
                   href="https://www.gnu.org/licenses/gpl-2.0.html"
@@ -507,7 +512,7 @@ export default function ToolDownloader({
                   GNU GPL v2+
                 </a>
                 .
-              </p>
+              </p> */}
               <p>
                 <strong>ImageMagick</strong> is licensed under the{" "}
                 <a
@@ -560,7 +565,7 @@ export default function ToolDownloader({
                   Skip for Now
                 </button>
                 <p className="text-xs text-light-purple">
-                  FFmpeg and Pandoc are required for most conversions.
+                  FFmpeg is required for most conversions.
                 </p>
               </div>
             )}

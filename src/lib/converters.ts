@@ -7,12 +7,13 @@ export const conversionTools: ConversionTool[] = [
     supportedInputs: ["mp4", "mov", "avi", "mkv", "webm", "flv", "wmv", "m4v", "mpg", "mpeg", "3gp", "mp3", "wav", "flac", "ogg", "m4a", "wma", "aac"],
     supportedOutputs: ["mp4", "mov", "avi", "mkv", "webm", "mp3", "wav", "flac", "ogg", "m4a", "aac", "gif"],
   },
-  {
-    name: "Pandoc",
-    command: "pandoc",
-    supportedInputs: ["md", "markdown", "txt", "html", "htm", "docx", "odt", "rtf", "tex", "latex", "epub", "rst"],
-    supportedOutputs: ["md", "html", "pdf", "docx", "odt", "rtf", "tex", "epub", "txt"],
-  },
+  // DISABLED: Pandoc functionality temporarily disabled
+  // {
+  //   name: "Pandoc",
+  //   command: "pandoc",
+  //   supportedInputs: ["md", "markdown", "txt", "html", "htm", "docx", "odt", "rtf", "tex", "latex", "epub", "rst"],
+  //   supportedOutputs: ["md", "html", "pdf", "docx", "odt", "rtf", "tex", "epub", "txt"],
+  // },
   {
     name: "LibreOffice",
     command: "libreoffice",
