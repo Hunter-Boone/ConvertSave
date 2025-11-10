@@ -36,6 +36,41 @@ struct DownloadProgress {
     message: String,
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone, Default)]
+struct ToolConfig {
+    ffmpeg_path: Option<String>,
+    pandoc_path: Option<String>,
+    imagemagick_path: Option<String>,
+}
+
+/// Get the path to the config file
+fn get_config_path() -> Result<PathBuf, String> {
+    let data_dir = dirs::data_dir().ok_or("Could not find data directory")?;
+    let config_dir = data_dir.join("com.convertsave");
+    std::fs::create_dir_all(&config_dir).map_err(|e| e.to_string())?;
+    Ok(config_dir.join("config.json"))
+}
+
+/// Load the tool configuration from disk
+fn load_config() -> Result<ToolConfig, String> {
+    let config_path = get_config_path()?;
+    if config_path.exists() {
+        let contents = std::fs::read_to_string(config_path).map_err(|e| e.to_string())?;
+        let config: ToolConfig = serde_json::from_str(&contents).map_err(|e| e.to_string())?;
+        Ok(config)
+    } else {
+        Ok(ToolConfig::default())
+    }
+}
+
+/// Save the tool configuration to disk
+fn save_config(config: &ToolConfig) -> Result<(), String> {
+    let config_path = get_config_path()?;
+    let contents = serde_json::to_string_pretty(config).map_err(|e| e.to_string())?;
+    std::fs::write(config_path, contents).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
 /// Helper function to create a Command that doesn't show a console window on Windows
 fn create_command<S: AsRef<std::ffi::OsStr>>(program: S) -> Command {
     let mut command = Command::new(program);
@@ -661,6 +696,23 @@ fn determine_conversion_tool(input_ext: &str, output_ext: &str) -> Option<&'stat
 }
 
 fn get_tool_path(tool_name: &str) -> Result<PathBuf, String> {
+    // Check for custom path first
+    if let Ok(config) = load_config() {
+        let custom_path = match tool_name {
+            "ffmpeg" => config.ffmpeg_path,
+            "pandoc" => config.pandoc_path,
+            "imagemagick" => config.imagemagick_path,
+            _ => None,
+        };
+        
+        if let Some(path_str) = custom_path {
+            let path = PathBuf::from(path_str);
+            if path.exists() {
+                return Ok(path);
+            }
+        }
+    }
+    
     let platform_name = if cfg!(target_os = "windows") {
         "windows"
     } else if cfg!(target_os = "macos") {
@@ -1844,6 +1896,54 @@ async fn check_tools_status() -> Result<serde_json::Value, String> {
     Ok(serde_json::Value::Object(status))
 }
 
+#[tauri::command]
+async fn set_custom_tool_path(tool_name: String, path: String) -> Result<(), String> {
+    // Verify the path exists and is executable
+    let tool_path = PathBuf::from(&path);
+    if !tool_path.exists() {
+        return Err(format!("File does not exist: {}", path));
+    }
+    
+    // Verify it's the correct tool by running --version
+    let version_check = create_command(&path)
+        .arg("--version")
+        .output();
+    
+    match version_check {
+        Ok(output) if output.status.success() => {
+            // Load config, update it, and save
+            let mut config = load_config().unwrap_or_default();
+            
+            match tool_name.as_str() {
+                "ffmpeg" => config.ffmpeg_path = Some(path),
+                "pandoc" => config.pandoc_path = Some(path),
+                "imagemagick" => config.imagemagick_path = Some(path),
+                _ => return Err(format!("Unknown tool: {}", tool_name)),
+            }
+            
+            save_config(&config)?;
+            Ok(())
+        }
+        Ok(_) => Err(format!("The selected file does not appear to be a valid {} executable", tool_name)),
+        Err(e) => Err(format!("Failed to verify tool: {}", e)),
+    }
+}
+
+#[tauri::command]
+async fn clear_custom_tool_path(tool_name: String) -> Result<(), String> {
+    let mut config = load_config().unwrap_or_default();
+    
+    match tool_name.as_str() {
+        "ffmpeg" => config.ffmpeg_path = None,
+        "pandoc" => config.pandoc_path = None,
+        "imagemagick" => config.imagemagick_path = None,
+        _ => return Err(format!("Unknown tool: {}", tool_name)),
+    }
+    
+    save_config(&config)?;
+    Ok(())
+}
+
 /// Check for updates via Homebrew on macOS
 #[cfg(target_os = "macos")]
 async fn check_homebrew_updates(package: &str) -> Result<serde_json::Value, String> {
@@ -2679,7 +2779,9 @@ pub fn run() {
             download_imagemagick,
             test_tool,
             check_tools_status,
-            check_for_updates
+            check_for_updates,
+            set_custom_tool_path,
+            clear_custom_tool_path
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

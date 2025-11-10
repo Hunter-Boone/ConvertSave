@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { open } from "@tauri-apps/plugin-dialog";
 import { Check, X, Loader, ChevronDown, ChevronUp } from "lucide-react";
 import { LGPL_V3_LICENSE, GPL_V3_LICENSE, IMAGEMAGICK_LICENSE } from "../lib/licenses";
 
@@ -136,6 +137,59 @@ export default function ToolDownloader({
         return newSet;
       });
       setDownloadProgress(null);
+    }
+  };
+
+  const selectCustomPath = async (toolName: string) => {
+    try {
+      const selected = await open({
+        multiple: false,
+        directory: false,
+        title: `Select ${toolName} executable`,
+      });
+
+      if (selected && typeof selected === "string") {
+        setError(null);
+        setSuccessMessage(null);
+        
+        try {
+          await invoke("set_custom_tool_path", {
+            toolName,
+            path: selected,
+          });
+          
+          setSuccessMessage(`Custom path set for ${toolName}`);
+          
+          // Refresh tool status to reflect the change
+          checkToolsStatus();
+          
+          // Clear success message after a delay
+          setTimeout(() => {
+            setSuccessMessage(null);
+          }, 3000);
+        } catch (err) {
+          setError(`Failed to set custom path: ${err}`);
+        }
+      }
+    } catch (err) {
+      setError(`Failed to select file: ${err}`);
+    }
+  };
+
+  const useDefaultPath = async (toolName: string) => {
+    try {
+      await invoke("clear_custom_tool_path", { toolName });
+      setSuccessMessage(`Using default path for ${toolName}`);
+      
+      // Refresh tool status to reflect the change
+      checkToolsStatus();
+      
+      // Clear success message after a delay
+      setTimeout(() => {
+        setSuccessMessage(null);
+      }, 3000);
+    } catch (err) {
+      setError(`Failed to clear custom path: ${err}`);
     }
   };
 
@@ -338,10 +392,16 @@ export default function ToolDownloader({
                         You can also download FFmpeg directly and select a custom path.
                       </p>
                       <div className="flex space-x-2">
-                        <button className="btn-chunky bg-white border-2 border-dark-purple text-dark-purple px-4 py-2 text-sm hover:bg-light-bg">
+                        <button 
+                          onClick={() => selectCustomPath("ffmpeg")}
+                          className="btn-chunky bg-white border-2 border-dark-purple text-dark-purple px-4 py-2 text-sm hover:bg-light-bg"
+                        >
                           Select Custom Path
                         </button>
-                        <button className="btn-chunky bg-white border-2 border-dark-purple text-dark-purple px-4 py-2 text-sm hover:bg-light-bg">
+                        <button 
+                          onClick={() => useDefaultPath("ffmpeg")}
+                          className="btn-chunky bg-white border-2 border-dark-purple text-dark-purple px-4 py-2 text-sm hover:bg-light-bg"
+                        >
                           Use Default Path
                         </button>
                       </div>
@@ -486,10 +546,16 @@ export default function ToolDownloader({
                         You can also download ImageMagick directly and select a custom path.
                       </p>
                       <div className="flex space-x-2">
-                        <button className="btn-chunky bg-white border-2 border-dark-purple text-dark-purple px-4 py-2 text-sm hover:bg-light-bg">
+                        <button 
+                          onClick={() => selectCustomPath("imagemagick")}
+                          className="btn-chunky bg-white border-2 border-dark-purple text-dark-purple px-4 py-2 text-sm hover:bg-light-bg"
+                        >
                           Select Custom Path
                         </button>
-                        <button className="btn-chunky bg-white border-2 border-dark-purple text-dark-purple px-4 py-2 text-sm hover:bg-light-bg">
+                        <button 
+                          onClick={() => useDefaultPath("imagemagick")}
+                          className="btn-chunky bg-white border-2 border-dark-purple text-dark-purple px-4 py-2 text-sm hover:bg-light-bg"
+                        >
                           Use Default Path
                         </button>
                       </div>
