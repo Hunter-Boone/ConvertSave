@@ -3,8 +3,112 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { open } from "@tauri-apps/plugin-dialog";
 import ToolDownloader from "./components/ToolDownloader";
+import { CustomSelect } from "./components/CustomSelect";
 import { FileInfo } from "./types";
-import { ChevronDown } from "lucide-react";
+
+// FileItem component with thumbnail support
+function FileItem({ 
+  file, 
+  index, 
+  onRemove, 
+  formatFileSize 
+}: { 
+  file: FileInfo; 
+  index: number; 
+  onRemove: (index: number) => void; 
+  formatFileSize: (bytes: number) => string;
+}) {
+  const [thumbnailSrc, setThumbnailSrc] = useState<string | null>(null);
+
+  const imageExtensions = [
+    "jpg", "jpeg", "png", "gif", "webp", "bmp", "svg", "ico", "tiff", 
+    "heic", "heif", "avif"
+  ];
+  const isImage = imageExtensions.includes(file.extension.toLowerCase());
+
+  useEffect(() => {
+    if (!isImage) {
+      setThumbnailSrc(null);
+      return;
+    }
+
+    const loadThumbnail = async () => {
+      try {
+        const dataUrl = await invoke<string>("get_thumbnail", {
+          filePath: file.path,
+        });
+        setThumbnailSrc(dataUrl);
+      } catch (error) {
+        console.error("Error loading thumbnail:", error);
+        setThumbnailSrc(null);
+      }
+    };
+
+    loadThumbnail();
+  }, [file.path, isImage]);
+
+  return (
+    <div className="flex items-center justify-between p-4 bg-white border-2 border-dark-purple rounded-xl">
+      <div className="flex items-center space-x-4">
+        <div className="w-12 h-12 bg-muted-bg rounded-lg flex items-center justify-center overflow-hidden flex-shrink-0">
+          {thumbnailSrc ? (
+            <img
+              src={thumbnailSrc}
+              alt={file.name}
+              className="w-full h-full object-cover"
+              onError={() => setThumbnailSrc(null)}
+            />
+          ) : (
+            <svg
+              width="24"
+              height="24"
+              viewBox="0 0 24 24"
+              fill="none"
+              className="text-secondary"
+            >
+              <rect
+                x="3"
+                y="6"
+                width="15"
+                height="12"
+                rx="2"
+                stroke="currentColor"
+                strokeWidth="2"
+              />
+              <circle
+                cx="7.5"
+                cy="10.5"
+                r="1.5"
+                stroke="currentColor"
+                strokeWidth="2"
+              />
+              <path
+                d="M15 15l-3-3-4.5 4.5"
+                stroke="currentColor"
+                strokeWidth="2"
+              />
+            </svg>
+          )}
+        </div>
+        <div className="space-y-1">
+          <p className="font-bold text-dark-purple">{file.name}</p>
+          <p className="text-sm text-secondary">
+            {formatFileSize(file.size)} • {file.extension.toUpperCase()}
+          </p>
+        </div>
+      </div>
+      <button
+        onClick={() => onRemove(index)}
+        className="w-8 h-8 flex items-center justify-center rounded-lg border-2 border-dark-purple hover:bg-pink-accent transition-colors flex-shrink-0"
+        aria-label="Remove file"
+      >
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+          <path d="M2 2L14 14M14 2L2 14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+        </svg>
+      </button>
+    </div>
+  );
+}
 
 interface ToolStatus {
   ffmpeg: {
@@ -24,7 +128,7 @@ interface ToolStatus {
 
 function App() {
   const [selectedFiles, setSelectedFiles] = useState<FileInfo[]>([]);
-  const [selectedFormat, setSelectedFormat] = useState<string>("jpg");
+  const [selectedFormat, setSelectedFormat] = useState<string>("");
   const [advancedOptions] = useState<string>("");
   const [outputDirectory] = useState<string>("");
   const [isConverting, setIsConverting] = useState(false);
@@ -168,23 +272,58 @@ function App() {
     };
   }, []);
 
-  // Load all available formats on mount
+  // Load available formats based on selected files
   useEffect(() => {
     const loadFormats = async () => {
+      if (selectedFiles.length === 0) {
+        // Clear formats and selected format when no files are selected
+        setAvailableFormats([]);
+        setSelectedFormat("");
+        return;
+      }
+
       try {
-        // Get all common image formats
-        const commonFormats = [
-          "jpg", "jpeg", "png", "gif", "bmp", "webp", "tiff", "ico",
-          "heic", "heif", "avif", "svg"
-        ];
-        setAvailableFormats(commonFormats);
+        // Get unique extensions from selected files
+        const uniqueExtensions = Array.from(
+          new Set(selectedFiles.map(file => file.extension.toLowerCase()))
+        );
+
+        // Get available formats for each unique extension
+        const formatsByExtension = await Promise.all(
+          uniqueExtensions.map(async (ext) => {
+            try {
+              const formats = await invoke<any[]>("get_available_formats", {
+                inputExtension: ext,
+              });
+              return formats.map(f => f.format);
+            } catch (error) {
+              console.error(`Failed to load formats for ${ext}:`, error);
+              return [];
+            }
+          })
+        );
+
+        // Use union of all formats (additive approach)
+        if (formatsByExtension.length === 0) {
+          setAvailableFormats([]);
+          return;
+        }
+
+        // Combine all formats from all file types
+        const allFormats = Array.from(new Set(formatsByExtension.flat()));
+        setAvailableFormats(allFormats);
+
+        // Update selected format if current one is not available or empty
+        if ((!selectedFormat || !allFormats.includes(selectedFormat)) && allFormats.length > 0) {
+          setSelectedFormat(allFormats[0]);
+        }
       } catch (error) {
         console.error("Failed to load formats:", error);
       }
     };
 
     loadFormats();
-  }, []);
+  }, [selectedFiles]);
 
   const checkToolsStatus = async () => {
     try {
@@ -702,20 +841,13 @@ function App() {
         <div className="flex items-center space-x-3">
           <span className="text-secondary font-normal">Select Output:</span>
           
-          <div className="relative">
-            <select
-              value={selectedFormat}
-              onChange={(e) => setSelectedFormat(e.target.value)}
-              className="btn-chunky bg-white border-2 border-dark-purple text-dark-purple px-4 py-2 pr-10 appearance-none cursor-pointer hover:bg-light-bg focus:outline-none focus:ring-2 focus:ring-mint-accent"
-            >
-              {availableFormats.map((format) => (
-                <option key={format} value={format}>
-                  {format.toUpperCase()}
-                </option>
-              ))}
-            </select>
-            <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-dark-purple pointer-events-none" />
-          </div>
+          <CustomSelect
+            value={selectedFormat}
+            onChange={setSelectedFormat}
+            options={availableFormats}
+            disabled={selectedFiles.length === 0}
+            placeholder="No files selected"
+          />
 
           <button
             onClick={handleConvert}
@@ -794,12 +926,12 @@ function App() {
             </div>
           ) : (
             /* Compact Drop Zone */
-            <div className="border-2 border-dashed border-secondary rounded-xl p-6 text-center bg-lighter-bg">
-              <div className="flex items-center justify-center space-x-4">
-                <div className="w-12 h-12 bg-muted-bg rounded-lg flex items-center justify-center">
+            <div className="border-2 border-dashed border-secondary rounded-xl p-10 text-center bg-lighter-bg">
+              <div className="flex items-center justify-center space-x-6">
+                <div className="w-20 h-20 bg-muted-bg rounded-xl flex items-center justify-center">
                   <svg
-                    width="24"
-                    height="24"
+                    width="40"
+                    height="40"
                     viewBox="0 0 24 24"
                     fill="none"
                     className="text-secondary"
@@ -828,10 +960,10 @@ function App() {
                   </svg>
                 </div>
                 <div>
-                  <p className="font-bold text-dark-purple">Add more files.</p>
+                  <p className="font-bold text-dark-purple text-lg">Add more files.</p>
                   <button
                     onClick={handleBrowseFiles}
-                    className="text-sm text-dark-purple underline hover:text-secondary font-bold border-2 border-dark-purple rounded-lg px-3 py-1 mt-1"
+                    className="text-sm text-dark-purple hover:text-secondary font-bold border-2 border-dark-purple rounded-lg px-4 py-1.5 mt-2"
                   >
                     Browse
                   </button>
@@ -855,59 +987,13 @@ function App() {
 
               <div className="space-y-3">
                 {selectedFiles.map((file, index) => (
-                  <div
+                  <FileItem
                     key={index}
-                    className="flex items-center justify-between p-4 bg-white border-2 border-dark-purple rounded-xl"
-                  >
-                    <div className="flex items-center space-x-4">
-                      <div className="w-12 h-12 bg-muted-bg rounded-lg flex items-center justify-center overflow-hidden flex-shrink-0">
-                        <svg
-                          width="24"
-                          height="24"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          className="text-secondary"
-                        >
-                          <rect
-                            x="3"
-                            y="6"
-                            width="15"
-                            height="12"
-                            rx="2"
-                            stroke="currentColor"
-                            strokeWidth="2"
-                          />
-                          <circle
-                            cx="7.5"
-                            cy="10.5"
-                            r="1.5"
-                            stroke="currentColor"
-                            strokeWidth="2"
-                          />
-                          <path
-                            d="M15 15l-3-3-4.5 4.5"
-                            stroke="currentColor"
-                            strokeWidth="2"
-                          />
-                        </svg>
-                      </div>
-                      <div className="space-y-1">
-                        <p className="font-bold text-dark-purple">{file.name}</p>
-                        <p className="text-sm text-secondary">
-                          {formatFileSize(file.size)} • {file.extension.toUpperCase()}
-                        </p>
-                      </div>
-                    </div>
-                    <button
-                      onClick={() => removeFile(index)}
-                      className="w-8 h-8 flex items-center justify-center rounded-lg border-2 border-dark-purple hover:bg-pink-accent transition-colors flex-shrink-0"
-                      aria-label="Remove file"
-                    >
-                      <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-                        <path d="M2 2L14 14M14 2L2 14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                      </svg>
-                    </button>
-                  </div>
+                    file={file}
+                    index={index}
+                    onRemove={removeFile}
+                    formatFileSize={formatFileSize}
+                  />
                 ))}
               </div>
             </div>
