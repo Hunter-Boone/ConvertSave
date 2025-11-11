@@ -1967,9 +1967,24 @@ async fn set_custom_tool_path(tool_name: String, path: String) -> Result<(), Str
     info!("Path exists, verifying it's a valid {} executable...", tool_name);
     
     // Verify it's the correct tool by running --version
-    let version_check = create_command(&path)
-        .arg("--version")
-        .output();
+    let mut command = create_command(&path);
+    command.arg("--version");
+    
+    // On macOS, set DYLD_LIBRARY_PATH for ImageMagick to find its bundled libraries
+    #[cfg(target_os = "macos")]
+    if tool_name == "imagemagick" {
+        // tool_path is: ~/Library/Application Support/com.convertsave/imagemagick/bin/magick
+        // lib_dir should be: ~/Library/Application Support/com.convertsave/imagemagick/lib
+        if let Some(bin_dir) = tool_path.parent() {
+            if let Some(imagemagick_dir) = bin_dir.parent() {
+                let lib_dir = imagemagick_dir.join("lib");
+                info!("Setting DYLD_LIBRARY_PATH for ImageMagick verification: {}", lib_dir.display());
+                command.env("DYLD_LIBRARY_PATH", lib_dir);
+            }
+        }
+    }
+    
+    let version_check = command.output();
     
     match version_check {
         Ok(output) if output.status.success() => {
