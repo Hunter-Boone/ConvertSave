@@ -305,15 +305,37 @@ export default function ToolDownloader({
       )}
 
       <div className="h-screen bg-light-bg flex flex-col overflow-hidden relative">
-        {/* Close Button */}
-        <button
-          onClick={handleCloseClick}
-          className="absolute top-6 right-6 z-50 w-10 h-10 bg-white hover:bg-pink rounded-lg flex items-center justify-center transition-colors shadow-lg border-2 border-dark-purple"
-          aria-label="Close Tools Manager"
-          title="Back to main app"
-        >
-          <X className="w-6 h-6 text-dark-purple" />
-        </button>
+        {/* Top Right Buttons */}
+        <div className="absolute top-6 right-6 z-50 flex items-center space-x-2">
+          {/* View Logs Button */}
+          <button
+            onClick={async () => {
+              try {
+                await invoke("open_log_directory");
+              } catch (err) {
+                setError(`Failed to open logs: ${err}`);
+              }
+            }}
+            className="h-10 px-4 bg-white hover:bg-mint-accent rounded-lg flex items-center justify-center transition-colors shadow-lg border-2 border-dark-purple"
+            aria-label="View Logs"
+            title="Open log directory"
+          >
+            <svg className="w-5 h-5 text-dark-purple mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+            <span className="text-sm font-bold text-dark-purple">View Logs</span>
+          </button>
+          
+          {/* Close Button */}
+          <button
+            onClick={handleCloseClick}
+            className="w-10 h-10 bg-white hover:bg-pink rounded-lg flex items-center justify-center transition-colors shadow-lg border-2 border-dark-purple"
+            aria-label="Close Tools Manager"
+            title="Back to main app"
+          >
+            <X className="w-6 h-6 text-dark-purple" />
+          </button>
+        </div>
 
         {/* Main Content Area */}
         <div className="flex-1 overflow-y-auto overflow-x-hidden">

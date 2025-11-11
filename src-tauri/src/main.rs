@@ -7,6 +7,7 @@ use std::process::Command;
 use dirs;
 use serde_json;
 use tauri::{AppHandle, Emitter, Manager};
+use log::{info, error, warn, debug};
 
 // ═══════════════════════════════════════════════════════════════════════════
 // FEATURE TOGGLES - Set to `true` to enable, `false` to disable
@@ -83,12 +84,53 @@ fn create_command<S: AsRef<std::ffi::OsStr>>(program: S) -> Command {
     command
 }
 
+/// Get the log directory path
+#[tauri::command]
+fn get_log_directory(app: AppHandle) -> Result<String, String> {
+    let log_dir = app.path().app_log_dir().map_err(|e| e.to_string())?;
+    Ok(log_dir.to_string_lossy().to_string())
+}
+
+/// Open the log directory in the system file explorer
+#[tauri::command]
+async fn open_log_directory(app: AppHandle) -> Result<(), String> {
+    let log_dir = app.path().app_log_dir().map_err(|e| e.to_string())?;
+    
+    // Create the directory if it doesn't exist
+    std::fs::create_dir_all(&log_dir).map_err(|e| e.to_string())?;
+    
+    info!("Opening log directory: {}", log_dir.display());
+    
+    // Open the directory - note: we ignore the exit code as it varies by platform
+    #[cfg(target_os = "windows")]
+    {
+        let _ = create_command("explorer")
+            .arg(&log_dir)
+            .spawn();
+    }
+    
+    #[cfg(target_os = "macos")]
+    {
+        let _ = create_command("open")
+            .arg(&log_dir)
+            .spawn();
+    }
+    
+    #[cfg(target_os = "linux")]
+    {
+        let _ = create_command("xdg-open")
+            .arg(&log_dir)
+            .spawn();
+    }
+    
+    Ok(())
+}
+
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 #[tauri::command]
 fn get_available_formats(input_extension: String) -> Vec<ConversionOption> {
     // Debug logging
-    println!("=== GET_AVAILABLE_FORMATS ===");
-    println!("Input extension: '{}'", input_extension);
+    info!("Getting available formats for extension: '{}'", input_extension);
     
     // This is a simplified version - in production, you'd have more sophisticated mapping
     let mut options = Vec::new();
@@ -424,11 +466,11 @@ fn get_available_formats(input_extension: String) -> Vec<ConversionOption> {
             }
         }
         _ => {
-            println!("No match for extension: '{}'", input_extension);
+            info!("No conversion options found for extension: '{}'", input_extension);
         }
     }
     
-    println!("Returning {} format options", options.len());
+    info!("Found {} format options for '{}'", options.len(), input_extension);
     options
 }
 
@@ -439,11 +481,12 @@ async fn convert_file(
     output_directory: Option<String>,
     advanced_options: Option<String>,
 ) -> Result<String, String> {
-    // DEBUG: Print what we're doing
-    println!("=== CONVERSION DEBUG ===");
-    println!("Input: {}", input_path);
-    println!("Output format: {}", output_format);
-    println!("Custom output dir: {:?}", output_directory);
+    // Log conversion details
+    info!("Starting conversion: {} -> {}", input_path, output_format);
+    info!("Output directory: {:?}", output_directory);
+    if let Some(ref opts) = advanced_options {
+        info!("Advanced options: {}", opts);
+    }
     
     let input_path = PathBuf::from(&input_path);
     let file_stem = input_path.file_stem()
@@ -478,15 +521,19 @@ async fn convert_file(
             execute_conversion(tool, &input_path, &output_path, advanced_options).await
         }
         None => {
-            return Err(format!("No conversion tool available for {} to {}", input_extension, output_format));
+            let error_msg = format!("No conversion tool available for {} to {}", input_extension, output_format);
+            error!("{}", error_msg);
+            return Err(error_msg);
         }
     };
     
     match conversion_result {
         Ok(_) => {
+            info!("Conversion completed successfully: {}", output_path.display());
             Ok(format!("File converted successfully to: {}", output_path.to_string_lossy()))
         }
         Err(e) => {
+            error!("Conversion failed: {}", e);
             Err(e)
         }
     }
@@ -836,7 +883,9 @@ fn get_tool_path(tool_name: &str) -> Result<PathBuf, String> {
         .map(|p| p.display().to_string())
         .collect();
     
-    Err(format!("Tool not found: {} (checked: {})", tool_name, checked_paths.join(", ")))
+    let error_msg = format!("Tool not found: {} (checked: {})", tool_name, checked_paths.join(", "));
+    warn!("{}", error_msg);
+    Err(error_msg)
 }
 
 // Helper function to handle HEIC tile grid reassembly
@@ -864,7 +913,7 @@ fn convert_heic_with_tiles(
     let mut rotation_degrees = 0i32;
     
     if let Some(tile_grid_line) = stderr.lines().find(|line| line.contains("Tile Grid:") && line.contains("hevc") && line.contains("default")) {
-        println!("HEIC tile grid: {}", tile_grid_line);
+        debug!("HEIC tile grid: {}", tile_grid_line);
         
         use std::str::FromStr;
         for word in tile_grid_line.split_whitespace() {
@@ -874,7 +923,7 @@ fn convert_heic_with_tiles(
                         if w_val >= 100 && w_val < 100000 && h_val >= 100 && h_val < 100000 {
                             width = w_val;
                             height = h_val;
-                            println!("HEIC resolution: {}x{}", width, height);
+                            info!("HEIC resolution: {}x{}", width, height);
                             break;
                         }
                     }
@@ -887,15 +936,15 @@ fn convert_heic_with_tiles(
     if stderr.contains("rotation of -90") {
         has_rotation = true;
         rotation_degrees = -90;
-        println!("HEIC rotation: -90 degrees");
+        info!("HEIC rotation: -90 degrees");
     } else if stderr.contains("rotation of 90") {
         has_rotation = true;
         rotation_degrees = 90;
-        println!("HEIC rotation: 90 degrees");
+        info!("HEIC rotation: 90 degrees");
     } else if stderr.contains("rotation of 180") || stderr.contains("rotation of -180") {
         has_rotation = true;
         rotation_degrees = 180;
-        println!("HEIC rotation: 180 degrees");
+        info!("HEIC rotation: 180 degrees");
     }
     
     if width == 0 || height == 0 {
@@ -907,7 +956,7 @@ fn convert_heic_with_tiles(
     std::fs::create_dir_all(&temp_dir).map_err(|e| format!("Failed to create temp directory: {}", e))?;
     
     // Step 3: Extract tiles
-    println!("Extracting HEIC tiles to: {}", temp_dir.display());
+    info!("Extracting HEIC tiles to: {}", temp_dir.display());
     let tile_pattern = temp_dir.join("tile_%02d.png");
     
     let extract_output = create_command(tool_path)
@@ -929,7 +978,7 @@ fn convert_heic_with_tiles(
     let tile_size = 512u32;
     let cols = (width + tile_size - 1) / tile_size;  // Round up
     let rows = (height + tile_size - 1) / tile_size;  // Round up
-    println!("Tile grid: {}x{} ({}x{} tiles)", cols, rows, cols * tile_size, rows * tile_size);
+    info!("Tile grid: {}x{} ({}x{} tiles)", cols, rows, cols * tile_size, rows * tile_size);
     
     // Step 5: Stitch tiles together
     let stitched_path = temp_dir.join("stitched.png");
@@ -1033,7 +1082,7 @@ async fn execute_conversion(
                 // Try to use FFmpeg as fallback for other image formats
                 match get_tool_path("ffmpeg") {
                     Ok(ffmpeg_path) => {
-                        println!("ImageMagick not available, using FFmpeg fallback for image conversion");
+                        info!("ImageMagick not available, using FFmpeg fallback for image conversion");
                         ("ffmpeg", ffmpeg_path)
                     }
                     Err(_) => {
@@ -2763,6 +2812,28 @@ fn extract_tar_gz(archive_path: &PathBuf, extract_dir: &PathBuf, binary_name: &s
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(
+            tauri_plugin_log::Builder::new()
+                .targets([
+                    tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::Stdout),
+                    tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::LogDir { 
+                        file_name: Some("convertsave.log".to_string()) 
+                    }),
+                    tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::Webview),
+                ])
+                .level(log::LevelFilter::Info)
+                .build(),
+        )
+        .setup(|app| {
+            // Log the actual log directory being used
+            if let Some(log_dir) = app.path().app_log_dir().ok() {
+                println!("Logs will be written to: {}", log_dir.display());
+            }
+            
+            info!("ConvertSave application started");
+            info!("Version: {}", env!("CARGO_PKG_VERSION"));
+            Ok(())
+        })
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_shell::init())
@@ -2781,7 +2852,9 @@ pub fn run() {
             check_tools_status,
             check_for_updates,
             set_custom_tool_path,
-            clear_custom_tool_path
+            clear_custom_tool_path,
+            get_log_directory,
+            open_log_directory
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
