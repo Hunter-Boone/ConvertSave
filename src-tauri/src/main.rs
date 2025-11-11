@@ -1106,16 +1106,19 @@ async fn execute_conversion(
     
     let mut command = create_command(&tool_path);
     
-    // On macOS, set DYLD_LIBRARY_PATH for ImageMagick to find its bundled libraries
+    // On macOS, set DYLD_LIBRARY_PATH and MAGICK_HOME for ImageMagick to find its bundled libraries
     #[cfg(target_os = "macos")]
     if actual_tool == "imagemagick" {
         // tool_path is: ~/Library/Application Support/com.convertsave/imagemagick/bin/magick
         // We need DYLD_LIBRARY_PATH to point to: ~/Library/Application Support/com.convertsave/imagemagick/lib
+        // We need MAGICK_HOME to point to: ~/Library/Application Support/com.convertsave/imagemagick
         if let Some(bin_dir) = tool_path.parent() {
             if let Some(imagemagick_dir) = bin_dir.parent() {
                 let lib_dir = imagemagick_dir.join("lib");
-                println!("Setting DYLD_LIBRARY_PATH for ImageMagick: {}", lib_dir.display());
+                info!("Setting DYLD_LIBRARY_PATH for ImageMagick: {}", lib_dir.display());
+                info!("Setting MAGICK_HOME for ImageMagick: {}", imagemagick_dir.display());
                 command.env("DYLD_LIBRARY_PATH", lib_dir);
+                command.env("MAGICK_HOME", imagemagick_dir);
             }
         }
     }
@@ -1835,7 +1838,7 @@ async fn test_tool(tool_name: String) -> Result<String, String> {
     let mut command = create_command(&tool_path);
     command.arg("-version");
     
-    // On macOS, set DYLD_LIBRARY_PATH for ImageMagick to find its bundled libraries
+    // On macOS, set DYLD_LIBRARY_PATH and MAGICK_HOME for ImageMagick to find its bundled libraries
     #[cfg(target_os = "macos")]
     if tool_name == "imagemagick" {
         // tool_path is: ~/Library/Application Support/com.convertsave/imagemagick/bin/magick
@@ -1843,8 +1846,10 @@ async fn test_tool(tool_name: String) -> Result<String, String> {
         if let Some(bin_dir) = tool_path.parent() {
             if let Some(imagemagick_dir) = bin_dir.parent() {
                 let lib_dir = imagemagick_dir.join("lib");
-                println!("Setting DYLD_LIBRARY_PATH for ImageMagick test: {}", lib_dir.display());
+                info!("Setting DYLD_LIBRARY_PATH for ImageMagick test: {}", lib_dir.display());
+                info!("Setting MAGICK_HOME for ImageMagick test: {}", imagemagick_dir.display());
                 command.env("DYLD_LIBRARY_PATH", lib_dir);
+                command.env("MAGICK_HOME", imagemagick_dir);
             }
         }
     }
@@ -1970,7 +1975,7 @@ async fn set_custom_tool_path(tool_name: String, path: String) -> Result<(), Str
     let mut command = create_command(&path);
     command.arg("--version");
     
-    // On macOS, set DYLD_LIBRARY_PATH for ImageMagick to find its bundled libraries
+    // On macOS, set DYLD_LIBRARY_PATH and MAGICK_HOME for ImageMagick to find its bundled libraries
     #[cfg(target_os = "macos")]
     if tool_name == "imagemagick" {
         // tool_path is: ~/Library/Application Support/com.convertsave/imagemagick/bin/magick
@@ -1979,7 +1984,9 @@ async fn set_custom_tool_path(tool_name: String, path: String) -> Result<(), Str
             if let Some(imagemagick_dir) = bin_dir.parent() {
                 let lib_dir = imagemagick_dir.join("lib");
                 info!("Setting DYLD_LIBRARY_PATH for ImageMagick verification: {}", lib_dir.display());
+                info!("Setting MAGICK_HOME for ImageMagick verification: {}", imagemagick_dir.display());
                 command.env("DYLD_LIBRARY_PATH", lib_dir);
+                command.env("MAGICK_HOME", imagemagick_dir);
             }
         }
     }
