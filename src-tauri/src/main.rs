@@ -56,10 +56,12 @@ fn get_config_path() -> Result<PathBuf, String> {
 fn load_config() -> Result<ToolConfig, String> {
     let config_path = get_config_path()?;
     if config_path.exists() {
-        let contents = std::fs::read_to_string(config_path).map_err(|e| e.to_string())?;
+        let contents = std::fs::read_to_string(&config_path).map_err(|e| e.to_string())?;
         let config: ToolConfig = serde_json::from_str(&contents).map_err(|e| e.to_string())?;
+        debug!("Loaded config from {}: {:?}", config_path.display(), config);
         Ok(config)
     } else {
+        debug!("No config file found at {}, using defaults", config_path.display());
         Ok(ToolConfig::default())
     }
 }
@@ -68,7 +70,8 @@ fn load_config() -> Result<ToolConfig, String> {
 fn save_config(config: &ToolConfig) -> Result<(), String> {
     let config_path = get_config_path()?;
     let contents = serde_json::to_string_pretty(config).map_err(|e| e.to_string())?;
-    std::fs::write(config_path, contents).map_err(|e| e.to_string())?;
+    std::fs::write(&config_path, &contents).map_err(|e| e.to_string())?;
+    info!("Config saved to {}: {}", config_path.display(), contents);
     Ok(())
 }
 
@@ -753,9 +756,13 @@ fn get_tool_path(tool_name: &str) -> Result<PathBuf, String> {
         };
         
         if let Some(path_str) = custom_path {
-            let path = PathBuf::from(path_str);
+            let path = PathBuf::from(&path_str);
+            info!("Checking custom path for {}: {}", tool_name, path.display());
             if path.exists() {
+                info!("Using custom path for {}: {}", tool_name, path.display());
                 return Ok(path);
+            } else {
+                warn!("Custom path for {} no longer exists: {}", tool_name, path.display());
             }
         }
     }
@@ -1947,11 +1954,17 @@ async fn check_tools_status() -> Result<serde_json::Value, String> {
 
 #[tauri::command]
 async fn set_custom_tool_path(tool_name: String, path: String) -> Result<(), String> {
+    info!("Attempting to set custom path for {}: {}", tool_name, path);
+    
     // Verify the path exists and is executable
     let tool_path = PathBuf::from(&path);
     if !tool_path.exists() {
-        return Err(format!("File does not exist: {}", path));
+        let error_msg = format!("File does not exist: {}", path);
+        error!("{}", error_msg);
+        return Err(error_msg);
     }
+    
+    info!("Path exists, verifying it's a valid {} executable...", tool_name);
     
     // Verify it's the correct tool by running --version
     let version_check = create_command(&path)
@@ -1960,21 +1973,37 @@ async fn set_custom_tool_path(tool_name: String, path: String) -> Result<(), Str
     
     match version_check {
         Ok(output) if output.status.success() => {
+            info!("{} verified successfully", tool_name);
+            
             // Load config, update it, and save
             let mut config = load_config().unwrap_or_default();
             
             match tool_name.as_str() {
-                "ffmpeg" => config.ffmpeg_path = Some(path),
-                "pandoc" => config.pandoc_path = Some(path),
-                "imagemagick" => config.imagemagick_path = Some(path),
+                "ffmpeg" => config.ffmpeg_path = Some(path.clone()),
+                "pandoc" => config.pandoc_path = Some(path.clone()),
+                "imagemagick" => config.imagemagick_path = Some(path.clone()),
                 _ => return Err(format!("Unknown tool: {}", tool_name)),
             }
             
             save_config(&config)?;
+            info!("Custom path saved for {}: {}", tool_name, path);
             Ok(())
         }
-        Ok(_) => Err(format!("The selected file does not appear to be a valid {} executable", tool_name)),
-        Err(e) => Err(format!("Failed to verify tool: {}", e)),
+        Ok(output) => {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            let error_msg = format!(
+                "The selected file does not appear to be a valid {} executable.\nStdout: {}\nStderr: {}", 
+                tool_name, stdout, stderr
+            );
+            error!("{}", error_msg);
+            Err(error_msg)
+        }
+        Err(e) => {
+            let error_msg = format!("Failed to verify tool: {}", e);
+            error!("{}", error_msg);
+            Err(error_msg)
+        }
     }
 }
 
@@ -2821,7 +2850,7 @@ pub fn run() {
                     }),
                     tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::Webview),
                 ])
-                .level(log::LevelFilter::Info)
+                .level(log::LevelFilter::Debug)
                 .build(),
         )
         .setup(|app| {
