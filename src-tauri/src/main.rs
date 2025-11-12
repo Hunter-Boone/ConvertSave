@@ -1115,9 +1115,6 @@ async fn execute_conversion(
                 let lib_dir = imagemagick_dir.join("lib");
                 let etc_dir = imagemagick_dir.join("etc").join("ImageMagick-7");
                 
-                // Find the modules directory (usually lib/ImageMagick-7.x.x/modules-Q16HDRI/coders)
-                let modules_glob = lib_dir.join("ImageMagick-*").join("modules-Q16HDRI").join("coders");
-                
                 info!("Setting DYLD_LIBRARY_PATH: {}", lib_dir.display());
                 info!("Setting MAGICK_HOME: {}", imagemagick_dir.display());
                 
@@ -1128,22 +1125,19 @@ async fn execute_conversion(
                 if etc_dir.exists() {
                     info!("Setting MAGICK_CONFIGURE_PATH: {}", etc_dir.display());
                     command.env("MAGICK_CONFIGURE_PATH", &etc_dir);
-                }
-                
-                // Try to find and set the modules path
-                if let Ok(entries) = std::fs::read_dir(&lib_dir) {
-                    for entry in entries.flatten() {
-                        let path = entry.path();
-                        if path.is_dir() && path.file_name().and_then(|n| n.to_str()).map_or(false, |n| n.starts_with("ImageMagick-")) {
-                            let coders_path = path.join("modules-Q16HDRI").join("coders");
-                            if coders_path.exists() {
-                                info!("Setting MAGICK_CODER_MODULE_PATH: {}", coders_path.display());
-                                command.env("MAGICK_CODER_MODULE_PATH", &coders_path);
-                                break;
-                            }
+                } else {
+                    warn!("Configuration directory not found: {}", etc_dir.display());
+                    // List what's actually in the imagemagick directory
+                    if let Ok(entries) = std::fs::read_dir(&imagemagick_dir) {
+                        warn!("Contents of imagemagick directory:");
+                        for entry in entries.flatten() {
+                            warn!("  - {}", entry.path().display());
                         }
                     }
                 }
+                
+                // Don't set MAGICK_CODER_MODULE_PATH - let ImageMagick find modules automatically
+                // This avoids issues with .la files and module loading
             }
         }
     }
@@ -1882,20 +1876,7 @@ async fn test_tool(tool_name: String) -> Result<String, String> {
                     command.env("MAGICK_CONFIGURE_PATH", &etc_dir);
                 }
                 
-                // Find modules path
-                if let Ok(entries) = std::fs::read_dir(&lib_dir) {
-                    for entry in entries.flatten() {
-                        let path = entry.path();
-                        if path.is_dir() && path.file_name().and_then(|n| n.to_str()).map_or(false, |n| n.starts_with("ImageMagick-")) {
-                            let coders_path = path.join("modules-Q16HDRI").join("coders");
-                            if coders_path.exists() {
-                                info!("Setting MAGICK_CODER_MODULE_PATH for test: {}", coders_path.display());
-                                command.env("MAGICK_CODER_MODULE_PATH", &coders_path);
-                                break;
-                            }
-                        }
-                    }
-                }
+                // Don't set MAGICK_CODER_MODULE_PATH - let ImageMagick find modules automatically
             }
         }
     }
@@ -2040,20 +2021,7 @@ async fn set_custom_tool_path(tool_name: String, path: String) -> Result<(), Str
                     command.env("MAGICK_CONFIGURE_PATH", &etc_dir);
                 }
                 
-                // Find modules path
-                if let Ok(entries) = std::fs::read_dir(&lib_dir) {
-                    for entry in entries.flatten() {
-                        let path = entry.path();
-                        if path.is_dir() && path.file_name().and_then(|n| n.to_str()).map_or(false, |n| n.starts_with("ImageMagick-")) {
-                            let coders_path = path.join("modules-Q16HDRI").join("coders");
-                            if coders_path.exists() {
-                                info!("Setting MAGICK_CODER_MODULE_PATH for verification: {}", coders_path.display());
-                                command.env("MAGICK_CODER_MODULE_PATH", &coders_path);
-                                break;
-                            }
-                        }
-                    }
-                }
+                // Don't set MAGICK_CODER_MODULE_PATH - let ImageMagick find modules automatically
             }
         }
     }
