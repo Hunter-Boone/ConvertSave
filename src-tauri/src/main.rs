@@ -2468,9 +2468,8 @@ async fn get_imagemagick_download_info() -> Result<(String, String, bool), Strin
             "x86_64"
         };
         
-        // TODO: Replace YOUR_USERNAME with your actual GitHub username
         let github_release_url = format!(
-            "https://github.com/YOUR_USERNAME/ConvertSave-Libraries/releases/download/latest/imagemagick-macos-{}.tar.gz",
+            "https://github.com/Hunter-Boone/ConvertSave-Libraries/releases/download/latest/imagemagick-macos-{}.tar.gz",
             arch
         );
         
@@ -2483,8 +2482,7 @@ async fn get_imagemagick_download_info() -> Result<(String, String, bool), Strin
         ))
     } else {
         // For Linux - download from ConvertSave-Libraries GitHub releases
-        // TODO: Replace YOUR_USERNAME with your actual GitHub username
-        let github_release_url = "https://github.com/YOUR_USERNAME/ConvertSave-Libraries/releases/download/latest/imagemagick-linux-x64.tar.gz".to_string();
+        let github_release_url = "https://github.com/Hunter-Boone/ConvertSave-Libraries/releases/download/latest/imagemagick-linux-x64.tar.gz".to_string();
         
         info!("Downloading ImageMagick for Linux from ConvertSave-Libraries");
         
