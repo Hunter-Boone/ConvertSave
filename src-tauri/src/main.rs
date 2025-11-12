@@ -1136,8 +1136,24 @@ async fn execute_conversion(
                     }
                 }
                 
-                // Don't set MAGICK_CODER_MODULE_PATH - let ImageMagick find modules automatically
-                // This avoids issues with .la files and module loading
+                // Set module path for builds with --with-modules enabled
+                // Look for ImageMagick-* directory in lib
+                if let Ok(entries) = std::fs::read_dir(&lib_dir) {
+                    for entry in entries.flatten() {
+                        let path = entry.path();
+                        if path.is_dir() && path.file_name()
+                            .and_then(|n| n.to_str())
+                            .map(|n| n.starts_with("ImageMagick-"))
+                            .unwrap_or(false) {
+                            let modules_coders = path.join("modules-Q16HDRI").join("coders");
+                            if modules_coders.exists() {
+                                info!("Setting MAGICK_CODER_MODULE_PATH: {}", modules_coders.display());
+                                command.env("MAGICK_CODER_MODULE_PATH", &modules_coders);
+                                break;
+                            }
+                        }
+                    }
+                }
             }
         }
     }
