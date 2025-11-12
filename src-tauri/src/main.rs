@@ -1275,7 +1275,7 @@ async fn execute_conversion(
     }
     
     // Log the actual command being executed
-    println!("Executing command: {:?}", command);
+    debug!("Executing command: {:?}", command);
     
     let output = command.output()
         .map_err(|e| format!("Failed to execute {}: {}", tool_name, e))?;
@@ -1287,10 +1287,10 @@ async fn execute_conversion(
         let stdout = String::from_utf8_lossy(&output.stdout);
         
         // Log full output for debugging
-        println!("=== COMMAND FAILED ===");
-        println!("STDOUT:\n{}", stdout);
-        println!("STDERR:\n{}", stderr);
-        println!("======================");
+        error!("=== COMMAND FAILED ===");
+        error!("STDOUT:\n{}", stdout);
+        error!("STDERR:\n{}", stderr);
+        error!("======================");
         
         // Provide user-friendly error messages for common issues
         let error_msg = if stderr.contains("does not contain any stream") {
@@ -1300,9 +1300,9 @@ async fn execute_conversion(
                 "The file does not contain the required streams for this conversion.".to_string()
             }
         } else if stderr.contains("Unable to choose an output format") || (stderr.contains("use a standard extension") && (stderr.contains("heic") || stderr.contains("heif") || stderr.contains("avif"))) {
-            "HEIC/HEIF/AVIF encoding is not supported by this FFmpeg build.\n\nThese formats require special muxers that are not available. Try converting to:\n• JPG (best compatibility)\n• PNG (lossless)\n• WebP (modern, efficient)".to_string()
+            format!("HEIC/HEIF/AVIF encoding is not supported by this {} build.\n\nThese formats require special muxers that are not available. Try converting to:\n• JPG (best compatibility)\n• PNG (lossless)\n• WebP (modern, efficient)", tool_name)
         } else if stderr.contains("Unknown encoder") || stderr.contains("Encoder not found") || stderr.contains("libx265") || stderr.contains("libaom-av1") {
-            "The required codec is not available in this FFmpeg build.\n\nTry converting to a different format like JPG, PNG, or WebP.".to_string()
+            format!("The required codec is not available in this {} build.\n\nTry converting to a different format like JPG, PNG, or WebP.", tool_name)
         } else if stderr.contains("Invalid argument") && stderr.contains("Error opening output file") {
             "Cannot write to the output location. This may be due to:\n- Network drive access issues\n- Insufficient permissions\n- Invalid file path\n\nTry saving to a local drive instead.".to_string()
         } else if stderr.contains("No such file or directory") || stderr.contains("does not exist") {
