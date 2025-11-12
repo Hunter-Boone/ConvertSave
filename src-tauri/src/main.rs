@@ -2429,23 +2429,24 @@ async fn get_imagemagick_download_info() -> Result<(String, String, bool), Strin
         ))
     } else if cfg!(target_os = "macos") {
         // For macOS - download from ConvertSave-Libraries GitHub releases
-        // These builds include all dependencies bundled (freetype, jpeg, png, etc.)
+        // Prefer macOS 11 builds which have full HEIC support
         let arch = if cfg!(target_arch = "aarch64") {
             "arm64"
         } else {
             "x86_64"
         };
         
+        // Try macOS 11 build first (has HEIC support, works on macOS 11+)
         let github_release_url = format!(
-            "https://github.com/Hunter-Boone/ConvertSave-Libraries/releases/download/latest/imagemagick-macos-{}.tar.gz",
+            "https://github.com/Hunter-Boone/ConvertSave-Libraries/releases/download/latest/imagemagick-macos11-{}.tar.gz",
             arch
         );
         
-        info!("Downloading ImageMagick for macOS {} from ConvertSave-Libraries", arch);
+        info!("Downloading ImageMagick for macOS {} (macOS 11+ compatible with HEIC support)", arch);
         
         Ok((
             github_release_url,
-            format!("imagemagick-macos-{}.tar.gz", arch),
+            format!("imagemagick-macos11-{}.tar.gz", arch),
             false,
         ))
     } else {
