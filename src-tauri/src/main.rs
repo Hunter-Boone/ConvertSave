@@ -1106,19 +1106,44 @@ async fn execute_conversion(
     
     let mut command = create_command(&tool_path);
     
-    // On macOS, set DYLD_LIBRARY_PATH and MAGICK_HOME for ImageMagick to find its bundled libraries
+    // On macOS, set environment variables for ImageMagick to find its bundled libraries
     #[cfg(target_os = "macos")]
     if actual_tool == "imagemagick" {
         // tool_path is: ~/Library/Application Support/com.convertsave/imagemagick/bin/magick
-        // We need DYLD_LIBRARY_PATH to point to: ~/Library/Application Support/com.convertsave/imagemagick/lib
-        // We need MAGICK_HOME to point to: ~/Library/Application Support/com.convertsave/imagemagick
         if let Some(bin_dir) = tool_path.parent() {
             if let Some(imagemagick_dir) = bin_dir.parent() {
                 let lib_dir = imagemagick_dir.join("lib");
-                info!("Setting DYLD_LIBRARY_PATH for ImageMagick: {}", lib_dir.display());
-                info!("Setting MAGICK_HOME for ImageMagick: {}", imagemagick_dir.display());
-                command.env("DYLD_LIBRARY_PATH", lib_dir);
-                command.env("MAGICK_HOME", imagemagick_dir);
+                let etc_dir = imagemagick_dir.join("etc").join("ImageMagick-7");
+                
+                // Find the modules directory (usually lib/ImageMagick-7.x.x/modules-Q16HDRI/coders)
+                let modules_glob = lib_dir.join("ImageMagick-*").join("modules-Q16HDRI").join("coders");
+                
+                info!("Setting DYLD_LIBRARY_PATH: {}", lib_dir.display());
+                info!("Setting MAGICK_HOME: {}", imagemagick_dir.display());
+                
+                command.env("DYLD_LIBRARY_PATH", &lib_dir);
+                command.env("MAGICK_HOME", &imagemagick_dir);
+                
+                // Set configuration path if it exists
+                if etc_dir.exists() {
+                    info!("Setting MAGICK_CONFIGURE_PATH: {}", etc_dir.display());
+                    command.env("MAGICK_CONFIGURE_PATH", &etc_dir);
+                }
+                
+                // Try to find and set the modules path
+                if let Ok(entries) = std::fs::read_dir(&lib_dir) {
+                    for entry in entries.flatten() {
+                        let path = entry.path();
+                        if path.is_dir() && path.file_name().and_then(|n| n.to_str()).map_or(false, |n| n.starts_with("ImageMagick-")) {
+                            let coders_path = path.join("modules-Q16HDRI").join("coders");
+                            if coders_path.exists() {
+                                info!("Setting MAGICK_CODER_MODULE_PATH: {}", coders_path.display());
+                                command.env("MAGICK_CODER_MODULE_PATH", &coders_path);
+                                break;
+                            }
+                        }
+                    }
+                }
             }
         }
     }
@@ -1838,18 +1863,39 @@ async fn test_tool(tool_name: String) -> Result<String, String> {
     let mut command = create_command(&tool_path);
     command.arg("-version");
     
-    // On macOS, set DYLD_LIBRARY_PATH and MAGICK_HOME for ImageMagick to find its bundled libraries
+    // On macOS, set environment variables for ImageMagick
     #[cfg(target_os = "macos")]
     if tool_name == "imagemagick" {
-        // tool_path is: ~/Library/Application Support/com.convertsave/imagemagick/bin/magick
-        // lib_dir should be: ~/Library/Application Support/com.convertsave/imagemagick/lib
         if let Some(bin_dir) = tool_path.parent() {
             if let Some(imagemagick_dir) = bin_dir.parent() {
                 let lib_dir = imagemagick_dir.join("lib");
-                info!("Setting DYLD_LIBRARY_PATH for ImageMagick test: {}", lib_dir.display());
-                info!("Setting MAGICK_HOME for ImageMagick test: {}", imagemagick_dir.display());
-                command.env("DYLD_LIBRARY_PATH", lib_dir);
-                command.env("MAGICK_HOME", imagemagick_dir);
+                let etc_dir = imagemagick_dir.join("etc").join("ImageMagick-7");
+                
+                info!("Setting DYLD_LIBRARY_PATH for test: {}", lib_dir.display());
+                info!("Setting MAGICK_HOME for test: {}", imagemagick_dir.display());
+                
+                command.env("DYLD_LIBRARY_PATH", &lib_dir);
+                command.env("MAGICK_HOME", &imagemagick_dir);
+                
+                if etc_dir.exists() {
+                    info!("Setting MAGICK_CONFIGURE_PATH for test: {}", etc_dir.display());
+                    command.env("MAGICK_CONFIGURE_PATH", &etc_dir);
+                }
+                
+                // Find modules path
+                if let Ok(entries) = std::fs::read_dir(&lib_dir) {
+                    for entry in entries.flatten() {
+                        let path = entry.path();
+                        if path.is_dir() && path.file_name().and_then(|n| n.to_str()).map_or(false, |n| n.starts_with("ImageMagick-")) {
+                            let coders_path = path.join("modules-Q16HDRI").join("coders");
+                            if coders_path.exists() {
+                                info!("Setting MAGICK_CODER_MODULE_PATH for test: {}", coders_path.display());
+                                command.env("MAGICK_CODER_MODULE_PATH", &coders_path);
+                                break;
+                            }
+                        }
+                    }
+                }
             }
         }
     }
@@ -1975,18 +2021,39 @@ async fn set_custom_tool_path(tool_name: String, path: String) -> Result<(), Str
     let mut command = create_command(&path);
     command.arg("--version");
     
-    // On macOS, set DYLD_LIBRARY_PATH and MAGICK_HOME for ImageMagick to find its bundled libraries
+    // On macOS, set environment variables for ImageMagick
     #[cfg(target_os = "macos")]
     if tool_name == "imagemagick" {
-        // tool_path is: ~/Library/Application Support/com.convertsave/imagemagick/bin/magick
-        // lib_dir should be: ~/Library/Application Support/com.convertsave/imagemagick/lib
         if let Some(bin_dir) = tool_path.parent() {
             if let Some(imagemagick_dir) = bin_dir.parent() {
                 let lib_dir = imagemagick_dir.join("lib");
-                info!("Setting DYLD_LIBRARY_PATH for ImageMagick verification: {}", lib_dir.display());
-                info!("Setting MAGICK_HOME for ImageMagick verification: {}", imagemagick_dir.display());
-                command.env("DYLD_LIBRARY_PATH", lib_dir);
-                command.env("MAGICK_HOME", imagemagick_dir);
+                let etc_dir = imagemagick_dir.join("etc").join("ImageMagick-7");
+                
+                info!("Setting DYLD_LIBRARY_PATH for verification: {}", lib_dir.display());
+                info!("Setting MAGICK_HOME for verification: {}", imagemagick_dir.display());
+                
+                command.env("DYLD_LIBRARY_PATH", &lib_dir);
+                command.env("MAGICK_HOME", &imagemagick_dir);
+                
+                if etc_dir.exists() {
+                    info!("Setting MAGICK_CONFIGURE_PATH for verification: {}", etc_dir.display());
+                    command.env("MAGICK_CONFIGURE_PATH", &etc_dir);
+                }
+                
+                // Find modules path
+                if let Ok(entries) = std::fs::read_dir(&lib_dir) {
+                    for entry in entries.flatten() {
+                        let path = entry.path();
+                        if path.is_dir() && path.file_name().and_then(|n| n.to_str()).map_or(false, |n| n.starts_with("ImageMagick-")) {
+                            let coders_path = path.join("modules-Q16HDRI").join("coders");
+                            if coders_path.exists() {
+                                info!("Setting MAGICK_CODER_MODULE_PATH for verification: {}", coders_path.display());
+                                command.env("MAGICK_CODER_MODULE_PATH", &coders_path);
+                                break;
+                            }
+                        }
+                    }
+                }
             }
         }
     }
@@ -2385,7 +2452,7 @@ async fn get_pandoc_download_info() -> Result<(String, String, bool), String> {
 
 async fn get_imagemagick_download_info() -> Result<(String, String, bool), String> {
     if cfg!(target_os = "windows") {
-        // Dynamically fetch the latest portable version from ImageMagick binaries
+        // For Windows - use official ImageMagick portable builds
         let latest = fetch_latest_imagemagick_version().await?;
         Ok((
             format!("https://imagemagick.org/archive/binaries/{}", latest),
@@ -2393,18 +2460,37 @@ async fn get_imagemagick_download_info() -> Result<(String, String, bool), Strin
             true, // .7z file
         ))
     } else if cfg!(target_os = "macos") {
-        // For macOS - download official tarball from ImageMagick.org
-        // This includes bin/ and lib/ directories with all necessary libraries
+        // For macOS - download from ConvertSave-Libraries GitHub releases
+        // These builds include all dependencies bundled (freetype, jpeg, png, etc.)
+        let arch = if cfg!(target_arch = "aarch64") {
+            "arm64"
+        } else {
+            "x86_64"
+        };
+        
+        // TODO: Replace YOUR_USERNAME with your actual GitHub username
+        let github_release_url = format!(
+            "https://github.com/YOUR_USERNAME/ConvertSave-Libraries/releases/download/latest/imagemagick-macos-{}.tar.gz",
+            arch
+        );
+        
+        info!("Downloading ImageMagick for macOS {} from ConvertSave-Libraries", arch);
+        
         Ok((
-            "https://imagemagick.org/archive/binaries/ImageMagick-x86_64-apple-darwin20.1.0.tar.gz".to_string(),
-            "imagemagick-macos.tar.gz".to_string(),
+            github_release_url,
+            format!("imagemagick-macos-{}.tar.gz", arch),
             false,
         ))
     } else {
-        // For Linux - AppImage from https://imagemagick.org/archive/binaries/
+        // For Linux - download from ConvertSave-Libraries GitHub releases
+        // TODO: Replace YOUR_USERNAME with your actual GitHub username
+        let github_release_url = "https://github.com/YOUR_USERNAME/ConvertSave-Libraries/releases/download/latest/imagemagick-linux-x64.tar.gz".to_string();
+        
+        info!("Downloading ImageMagick for Linux from ConvertSave-Libraries");
+        
         Ok((
-            "https://imagemagick.org/archive/binaries/magick".to_string(),
-            "imagemagick-linux".to_string(),
+            github_release_url,
+            "imagemagick-linux-x64.tar.gz".to_string(),
             false,
         ))
     }
