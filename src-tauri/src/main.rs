@@ -2480,26 +2480,19 @@ async fn get_imagemagick_download_info() -> Result<(String, String, bool), Strin
             "x86_64"
         };
         
-        // Detect macOS version to choose the right build
-        // macOS 11-12: Use macOS 11 builds (with HEIC support)
-        // macOS 13+:   Use macOS 13 builds (GitHub Actions, no HEIC but more frequently updated)
+        // Use macos13 builds for all macOS versions (built with MACOSX_DEPLOYMENT_TARGET=11.0)
+        // These are built on GitHub Actions and should work on macOS 11+
         let macos_version = get_macos_version();
-        let build_suffix = if macos_version.0 < 13 {
-            info!("Detected macOS {}.{} - using macOS 11 build with HEIC support", macos_version.0, macos_version.1);
-            "macos11"
-        } else {
-            info!("Detected macOS {}.{} - using macOS 13 build", macos_version.0, macos_version.1);
-            "macos13"
-        };
+        info!("Detected macOS {}.{} - using macos13 build (compatible with macOS 11+)", macos_version.0, macos_version.1);
         
         let github_release_url = format!(
-            "https://github.com/Hunter-Boone/ConvertSave-Libraries/releases/download/latest/imagemagick-{}-{}.tar.gz",
-            build_suffix, arch
+            "https://github.com/Hunter-Boone/ConvertSave-Libraries/releases/download/latest/imagemagick-macos13-{}.tar.gz",
+            arch
         );
         
         Ok((
             github_release_url,
-            format!("imagemagick-{}-{}.tar.gz", build_suffix, arch),
+            format!("imagemagick-macos13-{}.tar.gz", arch),
             false,
         ))
     } else {
