@@ -1383,6 +1383,42 @@ fn get_macos_version() -> (u32, u32) {
     (13, 0)
 }
 
+/// Get macOS machine architecture at runtime (arm64 or x86_64)
+/// This detects the actual hardware, even if running an x86_64 app under Rosetta 2
+#[cfg(target_os = "macos")]
+fn get_macos_architecture() -> String {
+    use std::process::Command;
+    
+    // Use uname -m to get the actual machine architecture
+    let output = Command::new("uname")
+        .arg("-m")
+        .output();
+    
+    if let Ok(output) = output {
+        if let Ok(arch_str) = String::from_utf8(output.stdout) {
+            let arch = arch_str.trim();
+            // uname -m returns "arm64" on Apple Silicon, "x86_64" on Intel
+            if arch == "arm64" || arch == "aarch64" {
+                return "arm64".to_string();
+            } else if arch == "x86_64" {
+                return "x86_64".to_string();
+            }
+        }
+    }
+    
+    // Fallback to compile-time detection
+    if cfg!(target_arch = "aarch64") {
+        "arm64".to_string()
+    } else {
+        "x86_64".to_string()
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+fn get_macos_architecture() -> String {
+    "x86_64".to_string()
+}
+
 /// Install a package via Homebrew on macOS
 #[cfg(target_os = "macos")]
 async fn install_via_homebrew(app: AppHandle, package: &str) -> Result<String, String> {
@@ -2474,16 +2510,15 @@ async fn get_imagemagick_download_info() -> Result<(String, String, bool), Strin
         ))
     } else if cfg!(target_os = "macos") {
         // For macOS - download from ConvertSave-Libraries GitHub releases
-        let arch = if cfg!(target_arch = "aarch64") {
-            "arm64"
-        } else {
-            "x86_64"
-        };
+        // Detect actual machine architecture at runtime (not compile-time)
+        // This is important for Universal Binaries or x86_64 apps running under Rosetta 2
+        let arch = get_macos_architecture();
         
         // Use macos13 builds for all macOS versions (built with MACOSX_DEPLOYMENT_TARGET=11.0)
         // These are built on GitHub Actions and should work on macOS 11+
         let macos_version = get_macos_version();
-        info!("Detected macOS {}.{} - using macos13 build (compatible with macOS 11+)", macos_version.0, macos_version.1);
+        info!("Detected macOS {}.{} on {} architecture - using macos13 build (compatible with macOS 11+)", 
+              macos_version.0, macos_version.1, arch);
         
         let github_release_url = format!(
             "https://github.com/Hunter-Boone/ConvertSave-Libraries/releases/download/latest/imagemagick-macos13-{}.tar.gz",
