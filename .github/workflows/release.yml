@@ -111,7 +111,7 @@ jobs:
         run: |
           set -x  # Enable debug output
           mkdir -p ./release-assets
-          
+
           # Debug: Show what was downloaded
           echo "=== Downloaded artifacts structure ==="
           ls -la
@@ -184,13 +184,13 @@ jobs:
 
           echo "=== Release assets ready ==="
           ls -lah ./release-assets/
-          
+
           # Check if we have any files
           if [ -z "$(ls -A ./release-assets/)" ]; then
             echo "ERROR: No release assets found!"
             exit 1
           fi
-          
+
           # Remove original artifact directories to prevent double upload
           rm -rf linux-build macos-build windows-build
 
