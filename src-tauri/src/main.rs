@@ -2514,20 +2514,20 @@ async fn get_imagemagick_download_info() -> Result<(String, String, bool), Strin
         // This is important for Universal Binaries or x86_64 apps running under Rosetta 2
         let arch = get_macos_architecture();
         
-        // Use macos13 builds for all macOS versions (built with MACOSX_DEPLOYMENT_TARGET=11.0)
+        // Use ConvertSave-Libraries builds for all macOS versions (built with MACOSX_DEPLOYMENT_TARGET=11.0)
         // These are built on GitHub Actions and should work on macOS 11+
         let macos_version = get_macos_version();
-        info!("Detected macOS {}.{} on {} architecture - using macos13 build (compatible with macOS 11+)", 
+        info!("Detected macOS {}.{} on {} architecture - downloading ImageMagick build (compatible with macOS 11+)", 
               macos_version.0, macos_version.1, arch);
         
         let github_release_url = format!(
-            "https://github.com/Hunter-Boone/ConvertSave-Libraries/releases/download/latest/imagemagick-macos13-{}.tar.gz",
+            "https://github.com/Hunter-Boone/ConvertSave-Libraries/releases/download/latest/imagemagick-macos-{}.tar.gz",
             arch
         );
         
         Ok((
             github_release_url,
-            format!("imagemagick-macos13-{}.tar.gz", arch),
+            format!("imagemagick-macos-{}.tar.gz", arch),
             false,
         ))
     } else {
