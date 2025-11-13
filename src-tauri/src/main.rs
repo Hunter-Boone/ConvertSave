@@ -2608,13 +2608,13 @@ async fn get_imagemagick_download_info() -> Result<(String, String, bool), Strin
               macos_version.0, macos_version.1, arch);
         
         let github_release_url = format!(
-            "https://github.com/Hunter-Boone/ConvertSave-Libraries/releases/download/latest/imagemagick-macos13-{}.tar.gz",
+            "https://github.com/Hunter-Boone/ConvertSave-Libraries/releases/download/latest/imagemagick-macos-{}.tar.gz",
             arch
         );
         
         Ok((
             github_release_url,
-            format!("imagemagick-macos13-{}.tar.gz", arch),
+            format!("imagemagick-macos-{}.tar.gz", arch),
             false,
         ))
     } else {
