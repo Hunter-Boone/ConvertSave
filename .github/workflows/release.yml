@@ -143,12 +143,25 @@ jobs:
             fi
           done || true
 
-          # macOS files - search recursively and add macOS to filename
+          # macOS files - rename with clear architecture labels to match ImageMagick naming
           find macos-build -type f -name "*.dmg" 2>/dev/null | while read file; do
             if [ -f "$file" ]; then
               filename=$(basename "$file")
-              cp "$file" "./release-assets/${filename%.dmg}-macos.dmg"
-              echo "Copied: $file -> ./release-assets/${filename%.dmg}-macos.dmg"
+              
+              # Detect architecture from path or filename
+              if echo "$file" | grep -q "aarch64"; then
+                # Apple Silicon build - rename to arm64 (consistent with ImageMagick)
+                new_filename=$(echo "$filename" | sed 's/_aarch64\.dmg$/_macOS_arm64.dmg/' | sed 's/_arm64\.dmg$/_macOS_arm64.dmg/')
+              elif echo "$file" | grep -q "x86_64\|x64"; then
+                # Intel build - use x86_64 (consistent with ImageMagick)
+                new_filename=$(echo "$filename" | sed 's/_x64\.dmg$/_macOS_x86_64.dmg/' | sed 's/_x86_64\.dmg$/_macOS_x86_64.dmg/')
+              else
+                # Fallback
+                new_filename="${filename%.dmg}_macOS.dmg"
+              fi
+              
+              cp "$file" "./release-assets/$new_filename"
+              echo "Copied: $file -> ./release-assets/$new_filename"
             fi
           done || true
 
@@ -193,7 +206,8 @@ jobs:
 
             ### Downloads
             - **Windows**: Download the `.msi` or `.exe` installer
-            - **macOS**: Download the `.dmg` disk image (Universal - works on Intel & Apple Silicon)
+            - **macOS Intel (x86_64)**: Download the `*_macOS_x86_64.dmg` for Intel Macs
+            - **macOS Apple Silicon (arm64)**: Download the `*_macOS_arm64.dmg` for M1/M2/M3 Macs
             - **Linux**: Download `.deb`, `.rpm`, or `.AppImage` package
 
             ### Features

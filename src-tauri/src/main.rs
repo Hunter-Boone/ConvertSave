@@ -1336,6 +1336,47 @@ async fn execute_conversion(
                 } else {
                     error!("Cannot read binary metadata");
                 }
+                
+                // Check dylib dependencies
+                if let Ok(otool_output) = StdCommand::new("otool").arg("-L").arg(&tool_path).output() {
+                    let dylib_info = String::from_utf8_lossy(&otool_output.stdout);
+                    error!("Binary dependencies:\n{}", dylib_info);
+                    
+                    // Check if all dylibs exist and are correct architecture
+                    for line in dylib_info.lines().skip(1) {
+                        if let Some(dylib_path) = line.trim().split_whitespace().next() {
+                            if dylib_path.starts_with('@') {
+                                // @rpath or @loader_path - need to resolve
+                                continue;
+                            }
+                            
+                            if std::path::Path::new(dylib_path).exists() {
+                                if let Ok(file_output) = StdCommand::new("file").arg(dylib_path).output() {
+                                    let file_info = String::from_utf8_lossy(&file_output.stdout);
+                                    if !file_info.contains("arm64") {
+                                        error!("WARNING: Dependency {} is not arm64: {}", dylib_path, file_info.trim());
+                                    }
+                                }
+                            } else {
+                                error!("WARNING: Missing dependency: {}", dylib_path);
+                            }
+                        }
+                    }
+                }
+                
+                // Check for code signing/quarantine issues
+                error!("Checking quarantine attribute...");
+                if let Ok(xattr_output) = StdCommand::new("xattr").arg("-l").arg(&tool_path).output() {
+                    let xattr_info = String::from_utf8_lossy(&xattr_output.stdout);
+                    error!("Quarantine attributes: {}", if xattr_info.is_empty() { "none" } else { xattr_info.trim() });
+                    
+                    if xattr_info.contains("com.apple.quarantine") {
+                        error!("Binary is quarantined by macOS! Attempting to remove quarantine...");
+                        if let Ok(_) = StdCommand::new("xattr").arg("-d").arg("com.apple.quarantine").arg(&tool_path).output() {
+                            error!("Quarantine removed. Please try the conversion again.");
+                        }
+                    }
+                }
             }
         }
         
@@ -1355,10 +1396,15 @@ async fn execute_conversion(
         } else if stderr.contains("No such file or directory") || stderr.contains("does not exist") {
             "Input file not found. The file may have been moved or deleted.".to_string()
         } else if stderr.is_empty() && stdout.is_empty() {
-            // Binary failed to start - likely architecture mismatch
+            // Binary failed to start
             #[cfg(target_os = "macos")]
             {
-                format!("ImageMagick binary failed to start.\n\nThis is usually caused by:\n• Architecture mismatch (wrong Intel/ARM build)\n• Corrupted download\n\nTry:\n1. Delete ImageMagick from Settings\n2. Re-download to get the correct build for your Mac\n\nExit status: {:?}", output.status)
+                let status_code = output.status.code().unwrap_or(-1);
+                if status_code == 9 {
+                    format!("ImageMagick binary was killed by macOS (SIGKILL).\n\nThis is usually caused by:\n• Missing or incompatible dylib dependencies\n• macOS Gatekeeper/quarantine (check logs above)\n• Code signing issues\n\nCheck the detailed logs above for:\n- Missing dependencies\n- Wrong architecture dependencies\n- Quarantine status\n\nExit status: {:?}", output.status)
+                } else {
+                    format!("ImageMagick binary failed to start.\n\nThis is usually caused by:\n• Architecture mismatch (wrong Intel/ARM build)\n• Missing dependencies\n• Corrupted download\n\nCheck the detailed logs above.\n\nExit status: {:?}", output.status)
+                }
             }
             #[cfg(not(target_os = "macos"))]
             {
