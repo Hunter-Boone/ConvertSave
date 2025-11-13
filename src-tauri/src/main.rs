@@ -1304,9 +1304,40 @@ async fn execute_conversion(
         
         // Log full output for debugging
         error!("=== COMMAND FAILED ===");
+        error!("Exit status: {:?}", output.status);
         error!("STDOUT:\n{}", stdout);
         error!("STDERR:\n{}", stderr);
         error!("======================");
+        
+        // Check for empty output (binary failed to start)
+        if stderr.is_empty() && stdout.is_empty() {
+            error!("Binary produced no output - likely failed to start");
+            
+            // Additional diagnostics
+            #[cfg(target_os = "macos")]
+            if tool_name == "imagemagick" {
+                use std::process::Command as StdCommand;
+                
+                // Check binary architecture
+                if let Ok(file_output) = StdCommand::new("file").arg(&tool_path).output() {
+                    let file_info = String::from_utf8_lossy(&file_output.stdout);
+                    error!("Binary file info: {}", file_info);
+                    
+                    // Check machine architecture
+                    if let Ok(uname_output) = StdCommand::new("uname").arg("-m").output() {
+                        let machine_arch = String::from_utf8_lossy(&uname_output.stdout);
+                        error!("Machine architecture: {}", machine_arch.trim());
+                    }
+                }
+                
+                // Check if binary is executable
+                if let Ok(metadata) = std::fs::metadata(&tool_path) {
+                    error!("Binary permissions: {:?}", metadata.permissions());
+                } else {
+                    error!("Cannot read binary metadata");
+                }
+            }
+        }
         
         // Provide user-friendly error messages for common issues
         let error_msg = if stderr.contains("does not contain any stream") {
@@ -1323,6 +1354,16 @@ async fn execute_conversion(
             "Cannot write to the output location. This may be due to:\n- Network drive access issues\n- Insufficient permissions\n- Invalid file path\n\nTry saving to a local drive instead.".to_string()
         } else if stderr.contains("No such file or directory") || stderr.contains("does not exist") {
             "Input file not found. The file may have been moved or deleted.".to_string()
+        } else if stderr.is_empty() && stdout.is_empty() {
+            // Binary failed to start - likely architecture mismatch
+            #[cfg(target_os = "macos")]
+            {
+                format!("ImageMagick binary failed to start.\n\nThis is usually caused by:\n• Architecture mismatch (wrong Intel/ARM build)\n• Corrupted download\n\nTry:\n1. Delete ImageMagick from Settings\n2. Re-download to get the correct build for your Mac\n\nExit status: {:?}", output.status)
+            }
+            #[cfg(not(target_os = "macos"))]
+            {
+                format!("Binary failed to start. Exit status: {:?}", output.status)
+            }
         } else {
             // For other errors, show the technical details
             format!("Conversion failed. Error details: {}", stderr)
