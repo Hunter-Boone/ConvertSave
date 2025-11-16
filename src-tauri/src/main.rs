@@ -2052,9 +2052,32 @@ async fn test_tool(tool_name: String) -> Result<String, String> {
     let output = command.output()
         .map_err(|e| e.to_string())?;
     
-    if output.status.success() {
-        let version_info = String::from_utf8_lossy(&output.stdout);
-        let first_line = version_info.lines().next().unwrap_or("Unknown version");
+    // Some tools output version info to stderr instead of stdout
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    let combined_output = format!("{}{}", stdout, stderr);
+    
+    // Check if we got version information (some tools use stderr)
+    let version_info = if !stdout.trim().is_empty() {
+        &stdout
+    } else {
+        &stderr
+    };
+    
+    let first_line = version_info.lines().next().unwrap_or("Unknown version");
+    
+    // Verify the output contains expected strings
+    let is_valid = match tool_name.as_str() {
+        "ffmpeg" => combined_output.to_lowercase().contains("ffmpeg version"),
+        "pandoc" => combined_output.to_lowercase().contains("pandoc"),
+        "imagemagick" => {
+            let lower = combined_output.to_lowercase();
+            lower.contains("imagemagick") || lower.contains("version: imagemagick")
+        },
+        _ => output.status.success(),
+    };
+    
+    if is_valid {
         Ok(format!("{} is working! {}\n\nLocation: {}", tool_name, first_line, tool_path.display()))
     } else {
         Err(format!("{} test failed", tool_name))
@@ -2166,9 +2189,14 @@ async fn set_custom_tool_path(tool_name: String, path: String) -> Result<(), Str
     
     info!("Path exists, verifying it's a valid {} executable...", tool_name);
     
-    // Verify it's the correct tool by running --version
+    // Verify it's the correct tool by running -version
     let mut command = create_command(&path);
-    command.arg("--version");
+    
+    // FFmpeg uses -version (single dash), while most other tools use --version
+    match tool_name.as_str() {
+        "ffmpeg" => command.arg("-version"),
+        _ => command.arg("--version"),
+    };
     
     // On macOS, set environment variables for ImageMagick
     #[cfg(target_os = "macos")]
@@ -2197,32 +2225,45 @@ async fn set_custom_tool_path(tool_name: String, path: String) -> Result<(), Str
     let version_check = command.output();
     
     match version_check {
-        Ok(output) if output.status.success() => {
-            info!("{} verified successfully", tool_name);
-            
-            // Load config, update it, and save
-            let mut config = load_config().unwrap_or_default();
-            
-            match tool_name.as_str() {
-                "ffmpeg" => config.ffmpeg_path = Some(path.clone()),
-                "pandoc" => config.pandoc_path = Some(path.clone()),
-                "imagemagick" => config.imagemagick_path = Some(path.clone()),
-                _ => return Err(format!("Unknown tool: {}", tool_name)),
-            }
-            
-            save_config(&config)?;
-            info!("Custom path saved for {}: {}", tool_name, path);
-            Ok(())
-        }
         Ok(output) => {
             let stderr = String::from_utf8_lossy(&output.stderr);
             let stdout = String::from_utf8_lossy(&output.stdout);
-            let error_msg = format!(
-                "The selected file does not appear to be a valid {} executable.\nStdout: {}\nStderr: {}", 
-                tool_name, stdout, stderr
-            );
-            error!("{}", error_msg);
-            Err(error_msg)
+            
+            // Check if the output contains expected version strings
+            // Some tools (like ffmpeg) output version info to stderr instead of stdout
+            let combined_output = format!("{}{}", stdout, stderr).to_lowercase();
+            
+            let is_valid = match tool_name.as_str() {
+                "ffmpeg" => combined_output.contains("ffmpeg version"),
+                "pandoc" => combined_output.contains("pandoc"),
+                "imagemagick" => combined_output.contains("imagemagick") || combined_output.contains("version: imagemagick"),
+                _ => output.status.success(),
+            };
+            
+            if is_valid {
+                info!("{} verified successfully", tool_name);
+                
+                // Load config, update it, and save
+                let mut config = load_config().unwrap_or_default();
+                
+                match tool_name.as_str() {
+                    "ffmpeg" => config.ffmpeg_path = Some(path.clone()),
+                    "pandoc" => config.pandoc_path = Some(path.clone()),
+                    "imagemagick" => config.imagemagick_path = Some(path.clone()),
+                    _ => return Err(format!("Unknown tool: {}", tool_name)),
+                }
+                
+                save_config(&config)?;
+                info!("Custom path saved for {}: {}", tool_name, path);
+                Ok(())
+            } else {
+                let error_msg = format!(
+                    "The selected file does not appear to be a valid {} executable.\n\nStdout: {}\n\nStderr: {}", 
+                    tool_name, stdout, stderr
+                );
+                error!("{}", error_msg);
+                Err(error_msg)
+            }
         }
         Err(e) => {
             let error_msg = format!("Failed to verify tool: {}", e);
