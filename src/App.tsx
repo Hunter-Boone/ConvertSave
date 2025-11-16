@@ -8,22 +8,32 @@ import { CustomSelect } from "./components/CustomSelect";
 import { FileInfo } from "./types";
 
 // FileItem component with thumbnail support
-function FileItem({ 
-  file, 
-  index, 
-  onRemove, 
-  formatFileSize 
-}: { 
-  file: FileInfo; 
-  index: number; 
-  onRemove: (index: number) => void; 
+function FileItem({
+  file,
+  index,
+  onRemove,
+  formatFileSize,
+}: {
+  file: FileInfo;
+  index: number;
+  onRemove: (index: number) => void;
   formatFileSize: (bytes: number) => string;
 }) {
   const [thumbnailSrc, setThumbnailSrc] = useState<string | null>(null);
 
   const imageExtensions = [
-    "jpg", "jpeg", "png", "gif", "webp", "bmp", "svg", "ico", "tiff", 
-    "heic", "heif", "avif"
+    "jpg",
+    "jpeg",
+    "png",
+    "gif",
+    "webp",
+    "bmp",
+    "svg",
+    "ico",
+    "tiff",
+    "heic",
+    "heif",
+    "avif",
   ];
   const isImage = imageExtensions.includes(file.extension.toLowerCase());
 
@@ -104,7 +114,12 @@ function FileItem({
         aria-label="Remove file"
       >
         <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-          <path d="M2 2L14 14M14 2L2 14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+          <path
+            d="M2 2L14 14M14 2L2 14"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+          />
         </svg>
       </button>
     </div>
@@ -220,9 +235,11 @@ function App() {
         console.log("Adding files:", fileInfos);
         setSelectedFiles((prev) => {
           // Get existing file paths for deduplication
-          const existingPaths = new Set(prev.map(f => f.path));
+          const existingPaths = new Set(prev.map((f) => f.path));
           // Only add files that aren't already in the list
-          const newFiles = fileInfos.filter(file => !existingPaths.has(file.path));
+          const newFiles = fileInfos.filter(
+            (file) => !existingPaths.has(file.path)
+          );
           return [...prev, ...newFiles];
         });
 
@@ -292,7 +309,7 @@ function App() {
       try {
         // Get unique extensions from selected files
         const uniqueExtensions = Array.from(
-          new Set(selectedFiles.map(file => file.extension.toLowerCase()))
+          new Set(selectedFiles.map((file) => file.extension.toLowerCase()))
         );
 
         // Get available formats for each unique extension
@@ -302,7 +319,7 @@ function App() {
               const formats = await invoke<any[]>("get_available_formats", {
                 inputExtension: ext,
               });
-              return formats.map(f => f.format);
+              return formats.map((f) => f.format);
             } catch (error) {
               console.error(`Failed to load formats for ${ext}:`, error);
               return [];
@@ -321,7 +338,10 @@ function App() {
         setAvailableFormats(allFormats);
 
         // Update selected format if current one is not available or empty
-        if ((!selectedFormat || !allFormats.includes(selectedFormat)) && allFormats.length > 0) {
+        if (
+          (!selectedFormat || !allFormats.includes(selectedFormat)) &&
+          allFormats.length > 0
+        ) {
           setSelectedFormat(allFormats[0]);
         }
       } catch (error) {
@@ -351,7 +371,6 @@ function App() {
     checkToolsStatus();
   };
 
-
   const removeFile = (index: number) => {
     setSelectedFiles((prev) => prev.filter((_, i) => i !== index));
   };
@@ -372,11 +391,11 @@ function App() {
       let successCount = 0;
       let failureCount = 0;
       let lastOutputPath = "";
-      
+
       // Convert each file to the selected format
       for (let i = 0; i < selectedFiles.length; i++) {
         const file = selectedFiles[i];
-        
+
         try {
           const result = await invoke<string>("convert_file", {
             inputPath: file.path,
@@ -390,7 +409,7 @@ function App() {
           console.error(`Failed to convert ${file.name}:`, error);
           failureCount++;
         }
-        
+
         setConversionProgress(((i + 1) / selectedFiles.length) * 100);
       }
 
@@ -547,9 +566,11 @@ function App() {
 
         setSelectedFiles((prev) => {
           // Get existing file paths for deduplication
-          const existingPaths = new Set(prev.map(f => f.path));
+          const existingPaths = new Set(prev.map((f) => f.path));
           // Only add files that aren't already in the list
-          const newFiles = fileInfos.filter(file => !existingPaths.has(file.path));
+          const newFiles = fileInfos.filter(
+            (file) => !existingPaths.has(file.path)
+          );
           return [...prev, ...newFiles];
         });
       } else if (selected && typeof selected === "string") {
@@ -570,7 +591,7 @@ function App() {
 
           setSelectedFiles((prev) => {
             // Check if file already exists in the list
-            if (prev.some(f => f.path === fileInfo.path)) {
+            if (prev.some((f) => f.path === fileInfo.path)) {
               return prev; // Don't add duplicate
             }
             return [...prev, fileInfo];
@@ -589,7 +610,7 @@ function App() {
 
           setSelectedFiles((prev) => {
             // Check if file already exists in the list
-            if (prev.some(f => f.path === fileInfo.path)) {
+            if (prev.some((f) => f.path === fileInfo.path)) {
               return prev; // Don't add duplicate
             }
             return [...prev, fileInfo];
@@ -865,13 +886,13 @@ function App() {
         {/* Right side - Format dropdown and Convert button */}
         <div className="flex items-center space-x-3">
           <span className="text-secondary font-normal">Select Output:</span>
-          
+
           <CustomSelect
             value={selectedFormat}
             onChange={setSelectedFormat}
             options={availableFormats}
             disabled={selectedFiles.length === 0}
-            placeholder="No files selected"
+            placeholder="N/A"
           />
 
           <button
@@ -985,7 +1006,9 @@ function App() {
                   </svg>
                 </div>
                 <div>
-                  <p className="font-bold text-dark-purple text-lg">Add more files.</p>
+                  <p className="font-bold text-dark-purple text-lg">
+                    Add more files.
+                  </p>
                   <button
                     onClick={handleBrowseFiles}
                     className="text-sm text-dark-purple hover:text-secondary font-bold border-2 border-dark-purple rounded-lg px-4 py-1.5 mt-2"
@@ -1053,7 +1076,9 @@ function App() {
               >
                 <X className="w-5 h-5 text-dark-purple" />
               </button>
-              <p className="font-bold text-lg pr-8">{conversionResult.message}</p>
+              <p className="font-bold text-lg pr-8">
+                {conversionResult.message}
+              </p>
               {conversionResult.success && conversionResult.outputPath && (
                 <>
                   <p className="text-sm break-all">
