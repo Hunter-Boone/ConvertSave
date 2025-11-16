@@ -218,7 +218,13 @@ function App() {
         );
 
         console.log("Adding files:", fileInfos);
-        setSelectedFiles((prev) => [...prev, ...fileInfos]);
+        setSelectedFiles((prev) => {
+          // Get existing file paths for deduplication
+          const existingPaths = new Set(prev.map(f => f.path));
+          // Only add files that aren't already in the list
+          const newFiles = fileInfos.filter(file => !existingPaths.has(file.path));
+          return [...prev, ...newFiles];
+        });
 
         // Reset processing flag after a short delay to prevent rapid duplicates
         setTimeout(() => {
@@ -539,7 +545,13 @@ function App() {
           })
         );
 
-        setSelectedFiles((prev) => [...prev, ...fileInfos]);
+        setSelectedFiles((prev) => {
+          // Get existing file paths for deduplication
+          const existingPaths = new Set(prev.map(f => f.path));
+          // Only add files that aren't already in the list
+          const newFiles = fileInfos.filter(file => !existingPaths.has(file.path));
+          return [...prev, ...newFiles];
+        });
       } else if (selected && typeof selected === "string") {
         // Handle single file selection
         try {
@@ -556,7 +568,13 @@ function App() {
             extension: stats.extension,
           };
 
-          setSelectedFiles((prev) => [...prev, fileInfo]);
+          setSelectedFiles((prev) => {
+            // Check if file already exists in the list
+            if (prev.some(f => f.path === fileInfo.path)) {
+              return prev; // Don't add duplicate
+            }
+            return [...prev, fileInfo];
+          });
         } catch (error) {
           // Fallback for single file
           const fileName = String(selected).split(/[\\/]/).pop() || "Unknown";
@@ -569,7 +587,13 @@ function App() {
             extension: extension,
           };
 
-          setSelectedFiles((prev) => [...prev, fileInfo]);
+          setSelectedFiles((prev) => {
+            // Check if file already exists in the list
+            if (prev.some(f => f.path === fileInfo.path)) {
+              return prev; // Don't add duplicate
+            }
+            return [...prev, fileInfo];
+          });
         }
       }
     } catch (error) {
