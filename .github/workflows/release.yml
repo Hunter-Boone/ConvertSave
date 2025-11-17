@@ -112,73 +112,115 @@ jobs:
           set -x  # Enable debug output
           mkdir -p ./release-assets
 
+          # Extract version from tag (e.g., v0.4.0 -> 0.4.0)
+          VERSION="${GITHUB_REF_NAME#v}"
+          echo "Version: $VERSION"
+
           # Debug: Show what was downloaded
           echo "=== Downloaded artifacts structure ==="
           ls -la
           echo "=== Searching for all files recursively ==="
           find . -type f \( -name "*.deb" -o -name "*.rpm" -o -name "*.AppImage" -o -name "*.dmg" -o -name "*.msi" -o -name "*.exe" \) -ls
 
-          # Linux files - search recursively and add Linux to filename
+          # Linux files - consistent naming: ConvertSave_VERSION_Linux_ARCH.ext
           find linux-build -type f -name "*.deb" 2>/dev/null | while read file; do
             if [ -f "$file" ]; then
               filename=$(basename "$file")
-              cp "$file" "./release-assets/${filename%.deb}-linux.deb"
-              echo "Copied: $file -> ./release-assets/${filename%.deb}-linux.deb"
+              # Detect architecture from filename (e.g., amd64, arm64)
+              if echo "$filename" | grep -q "amd64"; then
+                arch="x86_64"
+              elif echo "$filename" | grep -q "arm64\|aarch64"; then
+                arch="arm64"
+              else
+                arch="x86_64"  # default
+              fi
+              new_name="ConvertSave_${VERSION}_Linux_${arch}.deb"
+              cp "$file" "./release-assets/$new_name"
+              echo "Copied: $file -> ./release-assets/$new_name"
             fi
           done || true
 
           find linux-build -type f -name "*.rpm" 2>/dev/null | while read file; do
             if [ -f "$file" ]; then
               filename=$(basename "$file")
-              cp "$file" "./release-assets/${filename%.rpm}-linux.rpm"
-              echo "Copied: $file -> ./release-assets/${filename%.rpm}-linux.rpm"
+              if echo "$filename" | grep -q "x86_64"; then
+                arch="x86_64"
+              elif echo "$filename" | grep -q "aarch64\|arm64"; then
+                arch="arm64"
+              else
+                arch="x86_64"  # default
+              fi
+              new_name="ConvertSave_${VERSION}_Linux_${arch}.rpm"
+              cp "$file" "./release-assets/$new_name"
+              echo "Copied: $file -> ./release-assets/$new_name"
             fi
           done || true
 
           find linux-build -type f -name "*.AppImage" 2>/dev/null | while read file; do
             if [ -f "$file" ]; then
               filename=$(basename "$file")
-              cp "$file" "./release-assets/${filename%.AppImage}-linux.AppImage"
-              echo "Copied: $file -> ./release-assets/${filename%.AppImage}-linux.AppImage"
+              if echo "$filename" | grep -q "amd64\|x86_64"; then
+                arch="x86_64"
+              elif echo "$filename" | grep -q "aarch64\|arm64"; then
+                arch="arm64"
+              else
+                arch="x86_64"  # default
+              fi
+              new_name="ConvertSave_${VERSION}_Linux_${arch}.AppImage"
+              cp "$file" "./release-assets/$new_name"
+              echo "Copied: $file -> ./release-assets/$new_name"
             fi
           done || true
 
-          # macOS files - rename with clear architecture labels to match ImageMagick naming
+          # macOS files - consistent naming: ConvertSave_VERSION_macOS_ARCH.dmg
           find macos-build -type f -name "*.dmg" 2>/dev/null | while read file; do
             if [ -f "$file" ]; then
-              filename=$(basename "$file")
-              
-              # Detect architecture from path or filename
+              # Detect architecture from path
               if echo "$file" | grep -q "aarch64"; then
-                # Apple Silicon build - rename to arm64 (consistent with ImageMagick)
-                new_filename=$(echo "$filename" | sed 's/_aarch64\.dmg$/_macOS_arm64.dmg/' | sed 's/_arm64\.dmg$/_macOS_arm64.dmg/')
-              elif echo "$file" | grep -q "x86_64\|x64"; then
-                # Intel build - use x86_64 (consistent with ImageMagick)
-                new_filename=$(echo "$filename" | sed 's/_x64\.dmg$/_macOS_x86_64.dmg/' | sed 's/_x86_64\.dmg$/_macOS_x86_64.dmg/')
+                arch="arm64"
+              elif echo "$file" | grep -q "x86_64"; then
+                arch="x86_64"
               else
-                # Fallback
-                new_filename="${filename%.dmg}_macOS.dmg"
+                arch="universal"  # fallback
               fi
               
-              cp "$file" "./release-assets/$new_filename"
-              echo "Copied: $file -> ./release-assets/$new_filename"
+              new_name="ConvertSave_${VERSION}_macOS_${arch}.dmg"
+              cp "$file" "./release-assets/$new_name"
+              echo "Copied: $file -> ./release-assets/$new_name"
             fi
           done || true
 
-          # Windows files - search recursively and add Windows to filename
+          # Windows files - consistent naming: ConvertSave_VERSION_Windows_ARCH.ext
           find windows-build -type f -name "*.msi" 2>/dev/null | while read file; do
             if [ -f "$file" ]; then
               filename=$(basename "$file")
-              cp "$file" "./release-assets/${filename%.msi}-windows.msi"
-              echo "Copied: $file -> ./release-assets/${filename%.msi}-windows.msi"
+              # Windows builds are typically x64
+              if echo "$filename" | grep -q "x64\|x86_64\|amd64"; then
+                arch="x64"
+              elif echo "$filename" | grep -q "arm64\|aarch64"; then
+                arch="arm64"
+              else
+                arch="x64"  # default
+              fi
+              new_name="ConvertSave_${VERSION}_Windows_${arch}.msi"
+              cp "$file" "./release-assets/$new_name"
+              echo "Copied: $file -> ./release-assets/$new_name"
             fi
           done || true
 
           find windows-build -type f -name "*.exe" 2>/dev/null | while read file; do
             if [ -f "$file" ]; then
               filename=$(basename "$file")
-              cp "$file" "./release-assets/${filename%.exe}-windows.exe"
-              echo "Copied: $file -> ./release-assets/${filename%.exe}-windows.exe"
+              if echo "$filename" | grep -q "x64\|x86_64\|amd64"; then
+                arch="x64"
+              elif echo "$filename" | grep -q "arm64\|aarch64"; then
+                arch="arm64"
+              else
+                arch="x64"  # default
+              fi
+              new_name="ConvertSave_${VERSION}_Windows_${arch}.exe"
+              cp "$file" "./release-assets/$new_name"
+              echo "Copied: $file -> ./release-assets/$new_name"
             fi
           done || true
 
@@ -205,10 +247,10 @@ jobs:
             A local file conversion utility with support for images, videos, audio, and documents.
 
             ### Downloads
-            - **Windows**: Download the `.msi` or `.exe` installer
-            - **macOS Intel (x86_64)**: Download the `*_macOS_x86_64.dmg` for Intel Macs
-            - **macOS Apple Silicon (arm64)**: Download the `*_macOS_arm64.dmg` for M1/M2/M3 Macs
-            - **Linux**: Download `.deb`, `.rpm`, or `.AppImage` package
+            - **Windows**: `ConvertSave_*_Windows_x64.msi` or `ConvertSave_*_Windows_x64.exe`
+            - **macOS Intel**: `ConvertSave_*_macOS_x86_64.dmg` for Intel Macs
+            - **macOS Apple Silicon**: `ConvertSave_*_macOS_arm64.dmg` for M1/M2/M3 Macs
+            - **Linux**: `ConvertSave_*_Linux_x86_64.deb`, `.rpm`, or `.AppImage`
 
             ### Features
             - Convert images, videos, audio, and documents
