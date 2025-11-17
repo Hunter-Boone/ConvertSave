@@ -565,7 +565,8 @@ async fn convert_file(
     match conversion_result {
         Ok(_) => {
             info!("Conversion completed successfully: {}", output_path.display());
-            Ok(format!("File converted successfully to: {}", output_path.to_string_lossy()))
+            // Return the actual output path so the frontend can use it
+            Ok(output_path.to_string_lossy().to_string())
         }
         Err(e) => {
             error!("Conversion failed: {}", e);
@@ -627,30 +628,52 @@ async fn test_directories() -> Result<serde_json::Value, String> {
 #[tauri::command]
 async fn open_folder(path: String) -> Result<(), String> {
     let path = PathBuf::from(path);
-    let folder = if path.is_file() {
-        path.parent().ok_or("Could not find parent folder")?
-    } else {
-        &path
-    };
     
     #[cfg(target_os = "windows")]
     {
-        create_command("explorer")
-            .arg(folder)
-            .spawn()
-            .map_err(|e| format!("Failed to open folder: {}", e))?;
+        // On Windows, if it's a file, use /select, to open Explorer and highlight the file
+        // If it's a folder, just open the folder normally
+        if path.is_file() {
+            create_command("explorer")
+                .arg("/select,")
+                .arg(&path)
+                .spawn()
+                .map_err(|e| format!("Failed to open folder: {}", e))?;
+        } else {
+            create_command("explorer")
+                .arg(&path)
+                .spawn()
+                .map_err(|e| format!("Failed to open folder: {}", e))?;
+        }
     }
     
     #[cfg(target_os = "macos")]
     {
-        create_command("open")
-            .arg(folder)
-            .spawn()
-            .map_err(|e| format!("Failed to open folder: {}", e))?;
+        // On macOS, use -R flag to reveal the file in Finder
+        if path.is_file() {
+            create_command("open")
+                .arg("-R")
+                .arg(&path)
+                .spawn()
+                .map_err(|e| format!("Failed to open folder: {}", e))?;
+        } else {
+            create_command("open")
+                .arg(&path)
+                .spawn()
+                .map_err(|e| format!("Failed to open folder: {}", e))?;
+        }
     }
     
     #[cfg(target_os = "linux")]
     {
+        // On Linux, most file managers don't have a standard "reveal" option
+        // So we open the parent folder
+        let folder = if path.is_file() {
+            path.parent().ok_or("Could not find parent folder")?
+        } else {
+            &path
+        };
+        
         create_command("xdg-open")
             .arg(folder)
             .spawn()
