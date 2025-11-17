@@ -3,7 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { open } from "@tauri-apps/plugin-dialog";
 import { Check, X, Loader, ChevronDown, ChevronUp } from "lucide-react";
-import { LGPL_V3_LICENSE, GPL_V3_LICENSE, IMAGEMAGICK_LICENSE } from "../lib/licenses";
+import { LGPL_V3_LICENSE, GPL_V3_LICENSE, IMAGEMAGICK_LICENSE, LUCIDE_LICENSE } from "../lib/licenses";
 
 interface ToolStatus {
   ffmpeg: {
@@ -297,6 +297,24 @@ export default function ToolDownloader({
               {expandedLicense === "imagemagick" && (
                 <div className="p-4 bg-light-bg rounded-xl text-xs text-secondary whitespace-pre-wrap font-mono max-h-96 overflow-y-auto">
                   {IMAGEMAGICK_LICENSE}
+                </div>
+              )}
+
+              {/* Lucide License */}
+              <button
+                onClick={() => setExpandedLicense(expandedLicense === "lucide" ? null : "lucide")}
+                className="w-full p-4 bg-white border-2 border-dark-purple rounded-xl flex items-center justify-between hover:bg-light-bg transition-colors"
+              >
+                <span className="font-bold text-dark-purple">Lucide License (ISC/MIT)</span>
+                {expandedLicense === "lucide" ? (
+                  <ChevronUp className="w-5 h-5 text-dark-purple" />
+                ) : (
+                  <ChevronDown className="w-5 h-5 text-dark-purple" />
+                )}
+              </button>
+              {expandedLicense === "lucide" && (
+                <div className="p-4 bg-light-bg rounded-xl text-xs text-secondary whitespace-pre-wrap font-mono max-h-96 overflow-y-auto">
+                  {LUCIDE_LICENSE}
                 </div>
               )}
             </div>
