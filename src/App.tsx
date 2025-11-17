@@ -335,14 +335,89 @@ function App() {
 
         // Combine all formats from all file types
         const allFormats = Array.from(new Set(formatsByExtension.flat()));
-        setAvailableFormats(allFormats);
+        
+        // Sort formats by popularity - most popular formats first
+        const formatPopularity: Record<string, number> = {
+          // Images - most popular first
+          jpg: 1,
+          jpeg: 2,
+          png: 3,
+          webp: 4,
+          gif: 5,
+          svg: 6,
+          bmp: 7,
+          tiff: 8,
+          tif: 9,
+          ico: 10,
+          heic: 11,
+          raw: 12,
+          
+          // Videos
+          mp4: 20,
+          webm: 21,
+          mov: 22,
+          avi: 23,
+          mkv: 24,
+          flv: 25,
+          wmv: 26,
+          m4v: 27,
+          mpg: 28,
+          mpeg: 29,
+          "3gp": 30,
+          
+          // Audio
+          mp3: 40,
+          wav: 41,
+          flac: 42,
+          ogg: 43,
+          m4a: 44,
+          aac: 45,
+          wma: 46,
+          
+          // Documents
+          pdf: 60,
+          docx: 61,
+          doc: 62,
+          txt: 63,
+          rtf: 64,
+          odt: 65,
+          html: 66,
+          htm: 67,
+          epub: 68,
+          
+          // Spreadsheets
+          xlsx: 80,
+          xls: 81,
+          csv: 82,
+          ods: 83,
+          
+          // Presentations
+          pptx: 100,
+          ppt: 101,
+          odp: 102,
+        };
+        
+        // Sort formats: known formats by popularity, unknown formats at the end alphabetically
+        const sortedFormats = allFormats.sort((a, b) => {
+          const aPopularity = formatPopularity[a.toLowerCase()] ?? 9999;
+          const bPopularity = formatPopularity[b.toLowerCase()] ?? 9999;
+          
+          if (aPopularity !== bPopularity) {
+            return aPopularity - bPopularity;
+          }
+          
+          // If both have same popularity (or both unknown), sort alphabetically
+          return a.localeCompare(b);
+        });
+        
+        setAvailableFormats(sortedFormats);
 
         // Update selected format if current one is not available or empty
         if (
-          (!selectedFormat || !allFormats.includes(selectedFormat)) &&
-          allFormats.length > 0
+          (!selectedFormat || !sortedFormats.includes(selectedFormat)) &&
+          sortedFormats.length > 0
         ) {
-          setSelectedFormat(allFormats[0]);
+          setSelectedFormat(sortedFormats[0]);
         }
       } catch (error) {
         console.error("Failed to load formats:", error);
