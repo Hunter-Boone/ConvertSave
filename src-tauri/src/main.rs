@@ -1290,9 +1290,9 @@ async fn execute_conversion(
                 .to_lowercase();
             
             // Check if we need to handle transparency -> opaque conversion
-            // Formats that don't support transparency
+            // Formats that don't support alpha transparency (or only binary transparency like GIF)
             let formats_without_transparency = [
-                "jpg", "jpeg", "bmp", "j2k", "jp2", "jpc", "jpf", "jpx", "jpm"
+                "jpg", "jpeg", "bmp", "gif", "j2k", "jp2", "jpc", "jpf", "jpx", "jpm"
             ];
             
             // If input has transparency and output format doesn't support it, flatten with white background
@@ -1379,9 +1379,9 @@ async fn execute_conversion(
                 .to_lowercase();
             
             // Check if we need to handle transparency -> opaque conversion
-            // Formats that don't support transparency
+            // Formats that don't support alpha transparency (or only binary transparency like GIF)
             let formats_without_transparency = [
-                "jpg", "jpeg", "bmp", "j2k", "jp2", "jpc", "jpf", "jpx", "jpm"
+                "jpg", "jpeg", "bmp", "gif", "j2k", "jp2", "jpc", "jpf", "jpx", "jpm"
             ];
             
             // If input has transparency and output format doesn't support it, flatten with white background
@@ -1397,9 +1397,10 @@ async fn execute_conversion(
             // Handle transparency flattening if needed  
             if needs_transparency_handling {
                 info!("🎨 TRANSPARENCY DETECTED! Adding white background for {} output using FFmpeg", output_ext);
-                // Create white background matching input size, then overlay
-                command.arg("-vf");
-                command.arg("format=rgba,split[img][tmp];[tmp]geq='r=255:g=255:b=255:a=255',format=rgba[bg];[bg][img]overlay=format=auto");
+                // Simple approach: split input, make one copy pure white, overlay original on top
+                // This avoids the color filter duration issue
+                command.arg("-filter_complex");
+                command.arg("[0:v]split=2[bg][fg];[bg]drawbox=c=white@1.0:t=fill[bg];[bg][fg]overlay=format=auto:shortest=1");
             }
             
             // Add advanced options if provided
