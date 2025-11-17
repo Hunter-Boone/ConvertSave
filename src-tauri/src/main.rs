@@ -477,6 +477,37 @@ fn get_available_formats(input_extension: String) -> Vec<ConversionOption> {
     options
 }
 
+/// Generate a unique file path by adding a numbered suffix if the file already exists
+/// Example: "file.png" -> "file (1).png" -> "file (2).png" etc.
+fn get_unique_output_path(base_dir: &PathBuf, file_stem: &str, extension: &str) -> PathBuf {
+    let initial_path = base_dir.join(format!("{}.{}", file_stem, extension));
+    
+    // If the file doesn't exist, use the original name
+    if !initial_path.exists() {
+        return initial_path;
+    }
+    
+    // File exists, so find the next available number
+    let mut counter = 1;
+    loop {
+        let numbered_path = base_dir.join(format!("{} ({}).{}", file_stem, counter, extension));
+        if !numbered_path.exists() {
+            return numbered_path;
+        }
+        counter += 1;
+        
+        // Safety check to prevent infinite loop (though unlikely to reach this)
+        if counter > 10000 {
+            // Fall back to timestamp-based naming
+            let timestamp = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_secs();
+            return base_dir.join(format!("{} ({}).{}", file_stem, timestamp, extension));
+        }
+    }
+}
+
 #[tauri::command]
 async fn convert_file(
     input_path: String,
@@ -515,7 +546,8 @@ async fn convert_file(
     std::fs::create_dir_all(&output_dir)
         .map_err(|e| format!("Failed to create output directory: {}", e))?;
     
-    let output_path = output_dir.join(format!("{}.{}", file_stem, output_format));
+    // Get a unique output path that won't overwrite existing files
+    let output_path = get_unique_output_path(&output_dir, file_stem, &output_format);
     
     // Determine which tool to use and perform the actual conversion
     let output_format_lower = output_format.to_lowercase();
