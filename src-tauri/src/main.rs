@@ -1114,31 +1114,66 @@ fn convert_heic_with_tiles(
     }
 }
 
-/// Check if an image has transparency (alpha channel) using ImageMagick
+/// Check if an image has transparency (alpha channel) using ImageMagick or FFmpeg
 fn has_transparency(image_path: &PathBuf) -> bool {
-    // Try to get ImageMagick path
-    let tool_path = match get_tool_path("imagemagick") {
-        Ok(path) => path,
-        Err(_) => return false, // If ImageMagick isn't available, assume no transparency
-    };
+    info!("Checking transparency for: {}", image_path.display());
     
-    // Use ImageMagick's identify command to check for alpha channel
-    // identify -format "%[channels]" image.png returns something like "srgba" (with alpha) or "srgb" (no alpha)
-    let output = create_command(&tool_path)
-        .arg("identify")
-        .arg("-format")
-        .arg("%[channels]")
-        .arg(image_path)
-        .output();
-    
-    if let Ok(output) = output {
-        if output.status.success() {
-            let channels = String::from_utf8_lossy(&output.stdout).to_lowercase();
-            // Check if alpha channel is present
-            return channels.contains("a");
+    // Try ImageMagick first (if available)
+    if let Ok(tool_path) = get_tool_path("imagemagick") {
+        info!("Using ImageMagick to check transparency");
+        // ImageMagick 7 syntax: magick identify -format "%[channels]" image.png
+        // Returns something like "srgba" (with alpha) or "srgb" (no alpha)
+        let output = create_command(&tool_path)
+            .arg("identify")
+            .arg("-format")
+            .arg("%[channels]")
+            .arg(image_path)
+            .output();
+        
+        if let Ok(output) = output {
+            if output.status.success() {
+                let channels = String::from_utf8_lossy(&output.stdout).to_lowercase();
+                info!("Image channels detected: '{}'", channels);
+                let has_alpha = channels.contains("a");
+                info!("Has transparency: {}", has_alpha);
+                return has_alpha;
+            }
         }
     }
     
+    // Fallback to FFmpeg if ImageMagick isn't available
+    if let Ok(ffmpeg_path) = get_tool_path("ffmpeg") {
+        info!("Using FFmpeg to check transparency");
+        // Use FFmpeg itself to get stream info (works without ffprobe)
+        // ffmpeg -i input.png will output stream info to stderr
+        let output = create_command(&ffmpeg_path)
+            .arg("-i")
+            .arg(image_path)
+            .output();
+        
+        if let Ok(output) = output {
+            // FFmpeg outputs stream info to stderr
+            let stderr = String::from_utf8_lossy(&output.stderr).to_lowercase();
+            info!("FFmpeg output (first 500 chars): {}", &stderr.chars().take(500).collect::<String>());
+            
+            // Look for pixel format information in the stderr output
+            // Example: "Stream #0:0: Video: png, rgba, 1920x1080"
+            // Look for rgba, yuva420p, gbrap, etc. (formats with alpha)
+            let has_alpha = stderr.contains("rgba") || 
+                           stderr.contains("yuva") || 
+                           stderr.contains("gbra") ||
+                           stderr.contains("ya8") ||
+                           stderr.contains("ya16") ||
+                           stderr.contains("yuva420p") ||
+                           stderr.contains("yuva422p") ||
+                           stderr.contains("yuva444p");
+            
+            info!("Has transparency: {}", has_alpha);
+            return has_alpha;
+        }
+    }
+    
+    warn!("Could not check transparency - no tools available");
     false
 }
 
@@ -1343,10 +1378,28 @@ async fn execute_conversion(
                 .unwrap_or("")
                 .to_lowercase();
             
+            // Check if we need to handle transparency -> opaque conversion
+            // Formats that don't support transparency
+            let formats_without_transparency = [
+                "jpg", "jpeg", "bmp", "j2k", "jp2", "jpc", "jpf", "jpx", "jpm"
+            ];
+            
+            // If input has transparency and output format doesn't support it, flatten with white background
+            // For FFmpeg, we use a filter to composite the image over a white background
+            let needs_transparency_handling = formats_without_transparency.contains(&output_ext.as_str()) && has_transparency(input_path);
+            
             if output_ext == "avif" {
                 // AVIF uses libaom-av1 or libsvtav1 codec
                 command.arg("-c:v").arg("libaom-av1");
                 command.arg("-crf").arg("30");
+            }
+            
+            // Handle transparency flattening if needed  
+            if needs_transparency_handling {
+                info!("🎨 TRANSPARENCY DETECTED! Adding white background for {} output using FFmpeg", output_ext);
+                // Create white background matching input size, then overlay
+                command.arg("-vf");
+                command.arg("format=rgba,split[img][tmp];[tmp]geq='r=255:g=255:b=255:a=255',format=rgba[bg];[bg][img]overlay=format=auto");
             }
             
             // Add advanced options if provided
