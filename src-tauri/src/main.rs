@@ -1397,10 +1397,27 @@ async fn execute_conversion(
             // Handle transparency flattening if needed  
             if needs_transparency_handling {
                 info!("🎨 TRANSPARENCY DETECTED! Adding white background for {} output using FFmpeg", output_ext);
-                // Simple approach: split input, make one copy pure white, overlay original on top
-                // This avoids the color filter duration issue
-                command.arg("-filter_complex");
-                command.arg("[0:v]split=2[bg][fg];[bg]drawbox=c=white@1.0:t=fill[bg];[bg][fg]overlay=format=auto:shortest=1");
+                
+                // GIF needs special handling: blend alpha + generate palette for best quality
+                if output_ext == "gif" {
+                    // Complex filter: blend with white, split, generate palette, use palette
+                    // This creates high-quality GIFs with proper color handling
+                    command.arg("-filter_complex");
+                    command.arg("format=yuva444p,geq=\
+                        'r=r(X,Y)*alpha(X,Y)/255+255*(255-alpha(X,Y))/255':\
+                        'g=g(X,Y)*alpha(X,Y)/255+255*(255-alpha(X,Y))/255':\
+                        'b=b(X,Y)*alpha(X,Y)/255+255*(255-alpha(X,Y))/255',\
+                        format=rgb24,split[s0][s1];[s0]palettegen[p];[s1][p]paletteuse");
+                } else {
+                    // For other formats (JPG, BMP, etc.)
+                    let geq_filter = "format=yuva444p,geq=\
+                        'r=r(X,Y)*alpha(X,Y)/255+255*(255-alpha(X,Y))/255':\
+                        'g=g(X,Y)*alpha(X,Y)/255+255*(255-alpha(X,Y))/255':\
+                        'b=b(X,Y)*alpha(X,Y)/255+255*(255-alpha(X,Y))/255':\
+                        'a=255'";
+                    command.arg("-vf");
+                    command.arg(geq_filter);
+                }
             }
             
             // Add advanced options if provided
