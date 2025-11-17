@@ -1114,6 +1114,34 @@ fn convert_heic_with_tiles(
     }
 }
 
+/// Check if an image has transparency (alpha channel) using ImageMagick
+fn has_transparency(image_path: &PathBuf) -> bool {
+    // Try to get ImageMagick path
+    let tool_path = match get_tool_path("imagemagick") {
+        Ok(path) => path,
+        Err(_) => return false, // If ImageMagick isn't available, assume no transparency
+    };
+    
+    // Use ImageMagick's identify command to check for alpha channel
+    // identify -format "%[channels]" image.png returns something like "srgba" (with alpha) or "srgb" (no alpha)
+    let output = create_command(&tool_path)
+        .arg("identify")
+        .arg("-format")
+        .arg("%[channels]")
+        .arg(image_path)
+        .output();
+    
+    if let Ok(output) = output {
+        if output.status.success() {
+            let channels = String::from_utf8_lossy(&output.stdout).to_lowercase();
+            // Check if alpha channel is present
+            return channels.contains("a");
+        }
+    }
+    
+    false
+}
+
 async fn execute_conversion(
     tool_name: &str,
     input_path: &PathBuf,
@@ -1225,6 +1253,19 @@ async fn execute_conversion(
                 .and_then(|ext| ext.to_str())
                 .unwrap_or("")
                 .to_lowercase();
+            
+            // Check if we need to handle transparency -> opaque conversion
+            // Formats that don't support transparency
+            let formats_without_transparency = [
+                "jpg", "jpeg", "bmp", "j2k", "jp2", "jpc", "jpf", "jpx", "jpm"
+            ];
+            
+            // If input has transparency and output format doesn't support it, flatten with white background
+            if formats_without_transparency.contains(&output_ext.as_str()) && has_transparency(input_path) {
+                info!("Detected transparency in input image, flattening with white background for {} output", output_ext);
+                command.arg("-background").arg("white");
+                command.arg("-flatten");
+            }
             
             // Format-specific quality and options
             match output_ext.as_str() {
