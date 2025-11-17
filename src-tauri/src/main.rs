@@ -1397,27 +1397,12 @@ async fn execute_conversion(
             // Handle transparency flattening if needed  
             if needs_transparency_handling {
                 info!("🎨 TRANSPARENCY DETECTED! Adding white background for {} output using FFmpeg", output_ext);
-                
-                // GIF needs special handling: blend alpha + generate palette for best quality
-                if output_ext == "gif" {
-                    // Complex filter: blend with white, split, generate palette, use palette
-                    // This creates high-quality GIFs with proper color handling
-                    command.arg("-filter_complex");
-                    command.arg("format=yuva444p,geq=\
-                        'r=r(X,Y)*alpha(X,Y)/255+255*(255-alpha(X,Y))/255':\
-                        'g=g(X,Y)*alpha(X,Y)/255+255*(255-alpha(X,Y))/255':\
-                        'b=b(X,Y)*alpha(X,Y)/255+255*(255-alpha(X,Y))/255',\
-                        format=rgb24,split[s0][s1];[s0]palettegen[p];[s1][p]paletteuse");
-                } else {
-                    // For other formats (JPG, BMP, etc.)
-                    let geq_filter = "format=yuva444p,geq=\
-                        'r=r(X,Y)*alpha(X,Y)/255+255*(255-alpha(X,Y))/255':\
-                        'g=g(X,Y)*alpha(X,Y)/255+255*(255-alpha(X,Y))/255':\
-                        'b=b(X,Y)*alpha(X,Y)/255+255*(255-alpha(X,Y))/255':\
-                        'a=255'";
-                    command.arg("-vf");
-                    command.arg(geq_filter);
-                }
+                // Exact command: -f lavfi -i color=c=white -filter_complex "[1][0]scale=rw:rh[bg];[bg][0]overlay=shortest=1" -q:v 1
+                command.arg("-f").arg("lavfi");
+                command.arg("-i").arg("color=c=white");
+                command.arg("-filter_complex");
+                command.arg("[1][0]scale=rw:rh[bg];[bg][0]overlay=shortest=1");
+                command.arg("-q:v").arg("1");
             }
             
             // Add advanced options if provided
