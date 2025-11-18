@@ -430,9 +430,8 @@ function App() {
   const checkToolsStatus = async () => {
     try {
       const status = await invoke<ToolStatus>("check_tools_status");
-      // Core tools required: FFmpeg only (Pandoc disabled)
-      // ImageMagick is optional (only needed for HEIC encoding)
-      const allReady = status.ffmpeg.available;
+      // Core tools required: At least one tool must be installed (FFmpeg or ImageMagick)
+      const allReady = status.ffmpeg.available || status.imagemagick.available;
       setToolsReady(allReady);
     } catch (err) {
       console.error("Failed to check tool status:", err);

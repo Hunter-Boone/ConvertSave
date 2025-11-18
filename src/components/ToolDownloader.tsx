@@ -204,9 +204,9 @@ export default function ToolDownloader({
     );
   }
 
-  // Core tools required: FFmpeg only (Pandoc disabled). ImageMagick is optional.
+  // Core tools required: At least one tool must be installed (FFmpeg or ImageMagick)
   const coreToolsReady =
-    toolStatus.ffmpeg.available;
+    toolStatus.ffmpeg.available || toolStatus.imagemagick.available;
 
   const handleCloseClick = () => {
     if (!coreToolsReady) {
@@ -365,7 +365,7 @@ export default function ToolDownloader({
                   Welcome to ConvertSave!
                 </h1>
                 <p className="text-lg text-secondary">
-                  To get started, we need to download a few conversion tools.
+                  To get started, you need to install at least one conversion tool.
                 </p>
               </div>
 

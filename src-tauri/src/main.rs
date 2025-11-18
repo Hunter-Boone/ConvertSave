@@ -810,12 +810,12 @@ fn determine_conversion_tool(input_ext: &str, output_ext: &str) -> Option<&'stat
 
 fn get_tool_path(tool_name: &str) -> Result<PathBuf, String> {
     // Check for custom path first
-    if let Ok(config) = load_config() {
+    if let Ok(mut config) = load_config() {
         let custom_path = match tool_name {
-            "ffmpeg" => config.ffmpeg_path,
-            "pandoc" => config.pandoc_path,
-            "imagemagick" => config.imagemagick_path,
-            _ => None,
+            "ffmpeg" => &config.ffmpeg_path,
+            "pandoc" => &config.pandoc_path,
+            "imagemagick" => &config.imagemagick_path,
+            _ => &None,
         };
         
         if let Some(path_str) = custom_path {
@@ -825,7 +825,16 @@ fn get_tool_path(tool_name: &str) -> Result<PathBuf, String> {
                 info!("Using custom path for {}: {}", tool_name, path.display());
                 return Ok(path);
             } else {
-                warn!("Custom path for {} no longer exists: {}", tool_name, path.display());
+                warn!("Custom path for {} no longer exists: {}. Clearing from config.", tool_name, path.display());
+                // Clear the invalid custom path from config
+                match tool_name {
+                    "ffmpeg" => config.ffmpeg_path = None,
+                    "pandoc" => config.pandoc_path = None,
+                    "imagemagick" => config.imagemagick_path = None,
+                    _ => {}
+                }
+                // Save the updated config (ignore errors as this is cleanup)
+                let _ = save_config(&config);
             }
         }
     }
