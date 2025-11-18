@@ -466,6 +466,7 @@ function App() {
       let successCount = 0;
       let failureCount = 0;
       let lastOutputPath = "";
+      let firstErrorMessage = "";
 
       // Convert each file to the selected format
       for (let i = 0; i < selectedFiles.length; i++) {
@@ -483,6 +484,10 @@ function App() {
         } catch (error) {
           console.error(`Failed to convert ${file.name}:`, error);
           failureCount++;
+          // Store the first error message to show to the user
+          if (!firstErrorMessage) {
+            firstErrorMessage = String(error);
+          }
         }
 
         setConversionProgress(((i + 1) / selectedFiles.length) * 100);
@@ -497,13 +502,13 @@ function App() {
       } else if (successCount > 0) {
         setConversionResult({
           success: true,
-          message: `Converted ${successCount} file(s), ${failureCount} failed`,
+          message: `Converted ${successCount} file(s), ${failureCount} failed. Error: ${firstErrorMessage}`,
           outputPath: lastOutputPath,
         });
       } else {
         setConversionResult({
           success: false,
-          message: `Failed to convert all files. Some formats may not support conversion to ${selectedFormat.toUpperCase()}.`,
+          message: firstErrorMessage || `Failed to convert all files. Some formats may not support conversion to ${selectedFormat.toUpperCase()}.`,
         });
       }
     } catch (error) {
@@ -1136,7 +1141,7 @@ function App() {
           {conversionResult && (
             <div
               className={`
-              p-6 rounded-xl font-normal space-y-3 relative
+              p-6 rounded-xl font-normal relative
               ${
                 conversionResult.success
                   ? "bg-mint-accent text-dark-purple"
@@ -1156,12 +1161,12 @@ function App() {
               </p>
               {conversionResult.success && conversionResult.outputPath && (
                 <>
-                  <p className="text-sm break-all">
+                  <p className="text-sm break-all mt-3">
                     Output: {conversionResult.outputPath}
                   </p>
                   <button
                     onClick={openOutputFolder}
-                    className="btn-chunky bg-dark-purple text-white px-6 py-2 text-sm"
+                    className="btn-chunky bg-dark-purple text-white px-6 py-2 text-sm mt-3"
                   >
                     Open Output Folder
                   </button>

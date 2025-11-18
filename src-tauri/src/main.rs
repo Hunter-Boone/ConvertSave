@@ -318,6 +318,12 @@ fn get_available_formats(input_extension: String) -> Vec<ConversionOption> {
                     display_name: "HEIC (High Efficiency)".to_string(),
                     color: "pink".to_string(),
                 });
+                options.push(ConversionOption {
+                    format: "heif".to_string(),
+                    tool: "imagemagick".to_string(),
+                    display_name: "HEIF (High Efficiency)".to_string(),
+                    color: "pink".to_string(),
+                });
             }
             if input_extension != "avif" {
                 options.push(ConversionOption {
@@ -731,10 +737,9 @@ fn determine_conversion_tool(input_ext: &str, output_ext: &str) -> Option<&'stat
         "pcx", "ico", "sgi", "sun",
         // Raw/Uncompressed formats
         "ppm", "pgm", "pbm", "pam",
-        // X Window System formats
-        "xbm", "xpm", "xwd",
         // Gaming/3D formats
         "dds"
+        // Note: X Window System formats (xbm, xpm, xwd) require ImageMagick
     ];
     let image_outputs_imagemagick = [
         // Standard/Common formats
@@ -782,8 +787,11 @@ fn determine_conversion_tool(input_ext: &str, output_ext: &str) -> Option<&'stat
     // Use ffmpeg for media and image conversions
     if (video_inputs.contains(&input_ext) || audio_inputs.contains(&input_ext)) && av_outputs.contains(&output_ext) {
         Some("ffmpeg")
-    } else if image_inputs.contains(&input_ext) && output_ext == "heic" || output_ext == "heif" {
+    } else if image_inputs.contains(&input_ext) && (output_ext == "heic" || output_ext == "heif") {
         // HEIC/HEIF encoding requires ImageMagick
+        Some("imagemagick")
+    } else if image_inputs.contains(&input_ext) && (output_ext == "xbm" || output_ext == "xpm" || output_ext == "xwd") {
+        // X Window System formats require ImageMagick (FFmpeg doesn't support them properly)
         Some("imagemagick")
     } else if image_inputs.contains(&input_ext) && image_outputs_imagemagick.contains(&output_ext) {
         // Try ImageMagick first for image conversions, but will fallback to FFmpeg if not available
@@ -1198,9 +1206,17 @@ async fn execute_conversion(
                 if output_ext == "heic" || output_ext == "heif" {
                     return Err(format!(
                         "ImageMagick is required for HEIC/HEIF encoding but is not installed.\n\n\
-                        Please install ImageMagick manually from:\n\
-                        https://imagemagick.org/script/download.php\n\n\
-                        Or use the Tools Manager in the app to download it."
+                        Please install ImageMagick from the Tools Manager in Settings."
+                    ));
+                }
+                
+                // X Window System formats require ImageMagick, no fallback available
+                if output_ext == "xbm" || output_ext == "xpm" || output_ext == "xwd" {
+                    return Err(format!(
+                        "ImageMagick is required for {} format but is not installed.\n\n\
+                        {} is an X Window System format not supported by FFmpeg.\n\n\
+                        Please install ImageMagick from the Tools Manager in Settings.",
+                        output_ext.to_uppercase(), output_ext.to_uppercase()
                     ));
                 }
                 
@@ -1381,18 +1397,13 @@ async fn execute_conversion(
             // Check if we need to handle transparency -> opaque conversion
             // Formats that don't support alpha transparency (or only binary transparency like GIF)
             let formats_without_transparency = [
-                "jpg", "jpeg", "bmp", "gif", "j2k", "jp2", "jpc", "jpf", "jpx", "jpm"
+                "jpg", "jpeg", "bmp", "gif", "ico", "j2k", "jp2", "jpc", "jpf", "jpx", "jpm",
+                "avif", "hdr", "pbm", "pgm", "ppm"
             ];
             
             // If input has transparency and output format doesn't support it, flatten with white background
             // For FFmpeg, we use a filter to composite the image over a white background
             let needs_transparency_handling = formats_without_transparency.contains(&output_ext.as_str()) && has_transparency(input_path);
-            
-            if output_ext == "avif" {
-                // AVIF uses libaom-av1 or libsvtav1 codec
-                command.arg("-c:v").arg("libaom-av1");
-                command.arg("-crf").arg("30");
-            }
             
             // Handle transparency flattening if needed  
             if needs_transparency_handling {
@@ -1401,8 +1412,36 @@ async fn execute_conversion(
                 command.arg("-f").arg("lavfi");
                 command.arg("-i").arg("color=c=white");
                 command.arg("-filter_complex");
-                command.arg("[1][0]scale=rw:rh[bg];[bg][0]overlay=shortest=1");
+                
+                // Build filter string based on format requirements
+                let mut filter = String::from("[1][0]scale=rw:rh[bg];[bg][0]overlay=shortest=1");
+                
+                // ICO needs resizing to max 256x256
+                if output_ext == "ico" {
+                    filter.push_str(",scale='min(256,iw)':'min(256,ih)':force_original_aspect_ratio=decrease");
+                }
+                
+                // Some formats need explicit pixel format conversion for proper color handling
+                let problematic_formats = ["avif", "hdr", "pbm", "pgm", "ppm"];
+                if problematic_formats.contains(&output_ext.as_str()) {
+                    filter.push_str(",format=rgb24");
+                }
+                
+                command.arg(&filter);
                 command.arg("-q:v").arg("1");
+            }
+            
+            // AVIF codec options must come AFTER inputs and filters
+            if output_ext == "avif" {
+                // AVIF uses libaom-av1 or libsvtav1 codec
+                command.arg("-c:v").arg("libaom-av1");
+                command.arg("-crf").arg("30");
+            }
+            
+            // ICO format requires resizing to max 256x256 (only if not already handling transparency)
+            if output_ext == "ico" && !needs_transparency_handling {
+                command.arg("-vf");
+                command.arg("scale='min(256,iw)':'min(256,ih)':force_original_aspect_ratio=decrease");
             }
             
             // Add advanced options if provided
@@ -1540,7 +1579,19 @@ async fn execute_conversion(
                 "The file does not contain the required streams for this conversion.".to_string()
             }
         } else if stderr.contains("Unable to choose an output format") || (stderr.contains("use a standard extension") && (stderr.contains("heic") || stderr.contains("heif") || stderr.contains("avif"))) {
-            format!("HEIC/HEIF/AVIF encoding is not supported by this {} build.\n\nThese formats require special muxers that are not available. Try converting to:\n• JPG (best compatibility)\n• PNG (lossless)\n• WebP (modern, efficient)", tool_name)
+            // Detect which format is being converted to
+            let output_ext = output_path.extension()
+                .and_then(|ext| ext.to_str())
+                .unwrap_or("")
+                .to_uppercase();
+            
+            // Check if this is an X Window format
+            let x_window_formats = ["XBM", "XPM", "XWD"];
+            if x_window_formats.contains(&output_ext.as_str()) {
+                format!("{} format is not supported by FFmpeg.\n\nThis format requires ImageMagick. Please install ImageMagick from the Tools Manager in Settings.", output_ext)
+            } else {
+                format!("{} format encoding is not supported by this {} build.\n\nThis format may be available with ImageMagick. Try:\n• Installing ImageMagick from Tools Manager\n• Converting to JPG, PNG, or WebP", output_ext, tool_name)
+            }
         } else if stderr.contains("Unknown encoder") || stderr.contains("Encoder not found") || stderr.contains("libx265") || stderr.contains("libaom-av1") {
             format!("The required codec is not available in this {} build.\n\nTry converting to a different format like JPG, PNG, or WebP.", tool_name)
         } else if stderr.contains("Invalid argument") && stderr.contains("Error opening output file") {
