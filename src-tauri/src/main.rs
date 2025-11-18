@@ -1317,7 +1317,8 @@ async fn execute_conversion(
             // Check if we need to handle transparency -> opaque conversion
             // Formats that don't support alpha transparency (or only binary transparency like GIF)
             let formats_without_transparency = [
-                "jpg", "jpeg", "bmp", "gif", "j2k", "jp2", "jpc", "jpf", "jpx", "jpm"
+                "jpg", "jpeg", "bmp", "gif", "j2k", "jp2", "jpc", "jpf", "jpx", "jpm",
+                "hdr", "pbm", "pgm", "ppm"
             ];
             
             // If input has transparency and output format doesn't support it, flatten with white background
@@ -1406,8 +1407,8 @@ async fn execute_conversion(
             // Check if we need to handle transparency -> opaque conversion
             // Formats that don't support alpha transparency (or only binary transparency like GIF)
             let formats_without_transparency = [
-                "jpg", "jpeg", "bmp", "gif", "ico", "j2k", "jp2", "jpc", "jpf", "jpx", "jpm",
-                "avif", "hdr", "pbm", "pgm", "ppm"
+                "jpg", "jpeg", "bmp", "gif", "j2k", "jp2", "jpc", "jpf", "jpx", "jpm",
+                "hdr", "pbm", "pgm", "ppm"
             ];
             
             // If input has transparency and output format doesn't support it, flatten with white background
@@ -1425,13 +1426,8 @@ async fn execute_conversion(
                 // Build filter string based on format requirements
                 let mut filter = String::from("[1][0]scale=rw:rh[bg];[bg][0]overlay=shortest=1");
                 
-                // ICO needs resizing to max 256x256
-                if output_ext == "ico" {
-                    filter.push_str(",scale='min(256,iw)':'min(256,ih)':force_original_aspect_ratio=decrease");
-                }
-                
                 // Some formats need explicit pixel format conversion for proper color handling
-                let problematic_formats = ["avif", "hdr", "pbm", "pgm", "ppm"];
+                let problematic_formats = ["hdr", "pbm", "pgm", "ppm"];
                 if problematic_formats.contains(&output_ext.as_str()) {
                     filter.push_str(",format=rgb24");
                 }
@@ -1447,8 +1443,8 @@ async fn execute_conversion(
                 command.arg("-crf").arg("30");
             }
             
-            // ICO format requires resizing to max 256x256 (only if not already handling transparency)
-            if output_ext == "ico" && !needs_transparency_handling {
+            // ICO format requires resizing to max 256x256
+            if output_ext == "ico" {
                 command.arg("-vf");
                 command.arg("scale='min(256,iw)':'min(256,ih)':force_original_aspect_ratio=decrease");
             }
