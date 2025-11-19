@@ -152,7 +152,6 @@ function App() {
   const [conversionResult, setConversionResult] = useState<{
     success: boolean;
     message: string;
-    outputPath?: string;
   } | null>(null);
   const [toolsReady, setToolsReady] = useState<boolean | null>(null);
   const [showToolManager, setShowToolManager] = useState(false);
@@ -464,7 +463,6 @@ function App() {
     try {
       let successCount = 0;
       let failureCount = 0;
-      let lastOutputPath = "";
       let firstErrorMessage = "";
 
       // Convert each file to the selected format
@@ -472,13 +470,12 @@ function App() {
         const file = selectedFiles[i];
 
         try {
-          const result = await invoke<string>("convert_file", {
+          await invoke<string>("convert_file", {
             inputPath: file.path,
             outputFormat: selectedFormat,
             outputDirectory: outputDirectory || undefined,
             advancedOptions: advancedOptions || undefined,
           });
-          lastOutputPath = result;
           successCount++;
         } catch (error) {
           console.error(`Failed to convert ${file.name}:`, error);
@@ -496,13 +493,11 @@ function App() {
         setConversionResult({
           success: true,
           message: `Successfully converted ${successCount} file(s) to ${selectedFormat.toUpperCase()}!`,
-          outputPath: lastOutputPath,
         });
       } else if (successCount > 0) {
         setConversionResult({
           success: true,
           message: `Converted ${successCount} file(s), ${failureCount} failed. Error: ${firstErrorMessage}`,
-          outputPath: lastOutputPath,
         });
       } else {
         setConversionResult({
@@ -703,15 +698,6 @@ function App() {
     }
   };
 
-  const openOutputFolder = async () => {
-    if (conversionResult?.outputPath) {
-      try {
-        await invoke("open_folder", { path: conversionResult.outputPath });
-      } catch (error) {
-        console.error("Failed to open folder:", error);
-      }
-    }
-  };
 
   // ========== CUSTOM TITLE BAR COMPONENTS (COMMENTED OUT FOR NATIVE DECORATIONS) ==========
   // Uncomment these components to restore platform-specific custom window controls
@@ -1160,19 +1146,6 @@ function App() {
               <p className="font-bold text-lg pr-8">
                 {conversionResult.message}
               </p>
-              {conversionResult.success && conversionResult.outputPath && (
-                <>
-                  <p className="text-sm break-all mt-3">
-                    Output: {conversionResult.outputPath}
-                  </p>
-                  <button
-                    onClick={openOutputFolder}
-                    className="btn-chunky bg-dark-purple text-white px-6 py-2 text-sm mt-3"
-                  >
-                    Open Output Folder
-                  </button>
-                </>
-              )}
             </div>
           )}
         </div>
