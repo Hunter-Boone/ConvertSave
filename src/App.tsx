@@ -412,9 +412,11 @@ function App() {
         setAvailableFormats(sortedFormats);
 
         // Update selected format if current one is not available or empty
-        if (
-          (!selectedFormat || !sortedFormats.includes(selectedFormat)) &&
-          sortedFormats.length > 0
+        if (sortedFormats.length === 0) {
+          setSelectedFormat("");
+        } else if (
+          !selectedFormat ||
+          !sortedFormats.includes(selectedFormat)
         ) {
           setSelectedFormat(sortedFormats[0]);
         }
@@ -958,15 +960,15 @@ function App() {
             value={selectedFormat}
             onChange={setSelectedFormat}
             options={availableFormats}
-            disabled={selectedFiles.length === 0}
+            disabled={selectedFiles.length === 0 || availableFormats.length === 0}
             placeholder="No Formats"
           />
 
           <button
             onClick={handleConvert}
-            disabled={selectedFiles.length === 0 || isConverting}
+            disabled={selectedFiles.length === 0 || isConverting || !selectedFormat}
             className={`btn-chunky border-2 border-dark-purple px-8 py-2 ${
-              selectedFiles.length === 0 || isConverting
+              selectedFiles.length === 0 || isConverting || !selectedFormat
                 ? "bg-lighter-bg border-secondary text-secondary cursor-not-allowed"
                 : "bg-mint-accent text-dark-purple hover:bg-opacity-80"
             }`}
