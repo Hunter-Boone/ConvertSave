@@ -157,9 +157,22 @@ function App() {
   const [showToolManager, setShowToolManager] = useState(false);
   const [availableFormats, setAvailableFormats] = useState<string[]>([]);
   const [isDraggingOver, setIsDraggingOver] = useState(false);
+  const [updateAvailable, setUpdateAvailable] = useState(false);
   const isProcessingDrop = useRef(false);
 
   useEffect(() => {
+    const checkForAppUpdates = async () => {
+      try {
+        const hasUpdate = await invoke<boolean>("check_app_update");
+        if (hasUpdate) {
+          setUpdateAvailable(true);
+        }
+      } catch (error) {
+        console.error("Failed to check for app updates:", error);
+      }
+    };
+
+    checkForAppUpdates();
     // ========== PLATFORM DETECTION (COMMENTED OUT FOR NATIVE DECORATIONS) ==========
     // Uncomment this code if you restore the custom title bar
     // const userAgent = navigator.userAgent.toLowerCase();
@@ -437,6 +450,15 @@ function App() {
     } catch (err) {
       console.error("Failed to check tool status:", err);
       setToolsReady(false);
+    }
+  };
+
+  const handleUpdateApp = async () => {
+    try {
+      await invoke("install_app_update");
+    } catch (error) {
+      console.error("Failed to update app:", error);
+      alert(`Update failed: ${error}`);
     }
   };
 
@@ -953,13 +975,25 @@ function App() {
       {/* Toolbar */}
       <div className="bg-light-bg p-6 flex items-center justify-between flex-shrink-0">
         {/* Left side - Settings button */}
-        <button
-          onClick={() => setShowToolManager(true)}
-          className="btn-chunky bg-white border-2 border-dark-purple text-dark-purple px-6 py-2 hover:bg-light-bg"
-          title="Manage conversion tools"
-        >
-          Settings
-        </button>
+        <div className="flex items-center space-x-3">
+          <button
+            onClick={() => setShowToolManager(true)}
+            className="btn-chunky bg-white border-2 border-dark-purple text-dark-purple px-6 py-2 hover:bg-light-bg"
+            title="Manage conversion tools"
+          >
+            Settings
+          </button>
+          
+          {updateAvailable && (
+            <button
+              onClick={handleUpdateApp}
+              className="btn-chunky bg-yellow border-2 border-dark-purple text-dark-purple px-6 py-2 hover:bg-opacity-80 animate-pulse"
+              title="A new version is available!"
+            >
+              Update Application
+            </button>
+          )}
+        </div>
 
         {/* Right side - Format dropdown and Convert button */}
         <div className="flex items-center space-x-3">

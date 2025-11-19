@@ -7,6 +7,7 @@ use std::process::Command;
 use dirs;
 use serde_json;
 use tauri::{AppHandle, Emitter, Manager};
+use tauri_plugin_updater::UpdaterExt;
 use log::{info, error, warn, debug};
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -88,6 +89,57 @@ fn create_command<S: AsRef<std::ffi::OsStr>>(program: S) -> Command {
 }
 
 /// Get the log directory path
+#[tauri::command]
+async fn check_app_update(app: AppHandle) -> Result<bool, String> {
+    match app.updater() {
+        Ok(updater) => {
+            match updater.check().await {
+                Ok(Some(_update)) => Ok(true),
+                Ok(None) => Ok(false),
+                Err(e) => {
+                    error!("Failed to check for updates: {}", e);
+                    Ok(false)
+                }
+            }
+        }
+        Err(e) => {
+            error!("Failed to initialize updater: {}", e);
+            Ok(false)
+        }
+    }
+}
+
+#[tauri::command]
+async fn install_app_update(app: AppHandle) -> Result<(), String> {
+    match app.updater() {
+        Ok(updater) => {
+            match updater.check().await {
+                Ok(Some(update)) => {
+                    let mut downloaded = 0;
+                    
+                    // Download and install the update with progress tracking
+                    update.download_and_install(
+                        |chunk_length, _content_len| {
+                            downloaded += chunk_length;
+                            info!("Downloaded {} bytes", downloaded);
+                        },
+                        || {
+                            info!("Download finished");
+                        },
+                    ).await.map_err(|e| format!("Failed to install update: {}", e))?;
+                    
+                    info!("Update installed successfully, restarting...");
+                    app.restart();
+                    Ok(())
+                }
+                Ok(None) => Err("No update available".to_string()),
+                Err(e) => Err(format!("Failed to check for updates: {}", e)),
+            }
+        }
+        Err(e) => Err(format!("Failed to initialize updater: {}", e))
+    }
+}
+
 #[tauri::command]
 fn get_log_directory(app: AppHandle) -> Result<String, String> {
     let log_dir = app.path().app_log_dir().map_err(|e| e.to_string())?;
@@ -3446,6 +3498,7 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_http::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .invoke_handler(tauri::generate_handler![
             get_available_formats,
             convert_file,
@@ -3462,7 +3515,9 @@ pub fn run() {
             set_custom_tool_path,
             clear_custom_tool_path,
             get_log_directory,
-            open_log_directory
+            open_log_directory,
+            check_app_update,
+            install_app_update
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

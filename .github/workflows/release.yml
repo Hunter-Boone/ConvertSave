@@ -2,11 +2,8 @@ name: Build and Release
 
 on:
   push:
-    branches: [main]
     tags:
       - "v*"
-  pull_request:
-    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -56,14 +53,23 @@ jobs:
 
       - name: Build Tauri app (Windows/Linux)
         if: matrix.platform != 'macos-latest'
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: npm run tauri build
 
       - name: Build Intel macOS
         if: matrix.platform == 'macos-latest'
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: npm run tauri build -- --target x86_64-apple-darwin
 
       - name: Build Apple Silicon macOS
         if: matrix.platform == 'macos-latest'
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: npm run tauri build -- --target aarch64-apple-darwin
 
       - name: Upload artifacts (macOS)
@@ -75,6 +81,8 @@ jobs:
           path: |
             src-tauri/target/x86_64-apple-darwin/release/bundle/dmg/*.dmg
             src-tauri/target/aarch64-apple-darwin/release/bundle/dmg/*.dmg
+            src-tauri/target/x86_64-apple-darwin/release/bundle/dmg/*.sig
+            src-tauri/target/aarch64-apple-darwin/release/bundle/dmg/*.sig
 
       - name: Upload artifacts (Linux)
         if: matrix.platform == 'ubuntu-latest' && startsWith(github.ref, 'refs/tags/v')
@@ -86,6 +94,9 @@ jobs:
             src-tauri/target/release/bundle/deb/*.deb
             src-tauri/target/release/bundle/rpm/*.rpm
             src-tauri/target/release/bundle/appimage/*.AppImage
+            src-tauri/target/release/bundle/deb/*.sig
+            src-tauri/target/release/bundle/rpm/*.sig
+            src-tauri/target/release/bundle/appimage/*.sig
 
       - name: Upload artifacts (Windows)
         if: matrix.platform == 'windows-latest' && startsWith(github.ref, 'refs/tags/v')
@@ -96,6 +107,8 @@ jobs:
           path: |
             src-tauri/target/release/bundle/msi/*.msi
             src-tauri/target/release/bundle/nsis/*.exe
+            src-tauri/target/release/bundle/msi/*.sig
+            src-tauri/target/release/bundle/nsis/*.sig
 
   release:
     needs: build
@@ -116,159 +129,169 @@ jobs:
           VERSION="${GITHUB_REF_NAME#v}"
           echo "Version: $VERSION"
 
-          # Debug: Show what was downloaded
-          echo "=== Downloaded artifacts structure ==="
-          ls -la
-          echo "=== Searching for all files recursively ==="
-          find . -type f \( -name "*.deb" -o -name "*.rpm" -o -name "*.AppImage" -o -name "*.dmg" -o -name "*.msi" -o -name "*.exe" \) -ls
+          # Move files to release-assets with consistent naming
+          # This logic needs to handle .sig files too now
 
-          # Linux files - consistent naming: ConvertSave_VERSION_Linux_ARCH.ext
-          find linux-build -type f -name "*.deb" 2>/dev/null | while read file; do
-            if [ -f "$file" ]; then
-              filename=$(basename "$file")
-              # Detect architecture from filename (e.g., amd64, arm64)
-              if echo "$filename" | grep -q "amd64"; then
-                arch="x86_64"
-              elif echo "$filename" | grep -q "arm64\|aarch64"; then
-                arch="arm64"
-              else
-                arch="x86_64"  # default
-              fi
-              new_name="ConvertSave_${VERSION}_Linux_${arch}.deb"
-              cp "$file" "./release-assets/$new_name"
-              echo "Copied: $file -> ./release-assets/$new_name"
+          # Helper function to move files
+          move_asset() {
+            local src="$1"
+            local pattern="$2"
+            local os="$3"
+            local arch="$4"
+            
+            if [ -f "$src" ]; then
+               local ext="${src##*.}"
+               # If it's a signature file, keep .sig extension but match base name
+               if [[ "$src" == *.sig ]]; then
+                   # For sig files, we want file.ext.sig
+                   # But our previous step might have renamed the binary to specific name
+                   # So we should probably rename binary first, then rename sig to match binary name + .sig
+                   # Simplified approach: Just copy everything to release-assets
+                   # Tauri v2 updater usually looks for exact filenames or uses a manifest
+                   # Let's just copy them for now and let the updater generator handle it?
+                   # Actually, for cross-platform consistency, renaming is good.
+                   
+                   # New naming convention: ConvertSave_VERSION_OS_ARCH.ext[.sig]
+                   local new_name="ConvertSave_${VERSION}_${os}_${arch}.${ext}"
+                   
+                   # Special case for .sig files which usually append .sig to the full binary name
+                   if [[ "$src" == *.sig ]]; then
+                      # e.g. binary.dmg.sig
+                      # We want ConvertSave_..._macOS_...dmg.sig
+                      # The extension passed in was 'sig', so new_name is ...arch.sig
+                      # That's not quite right, signatures are usually binary_filename.sig
+                      
+                      # Let's assume src is like `bundle.dmg.sig`
+                      # We want `ConvertSave_...dmg.sig`
+                      
+                      # Get the extension of the binary it signs (e.g., 'dmg' from 'dmg.sig')
+                      local bin_ext=$(echo "$src" | sed 's/\.sig$//' | sed 's/.*\.//')
+                      new_name="ConvertSave_${VERSION}_${os}_${arch}.${bin_ext}.sig"
+                   else
+                      new_name="ConvertSave_${VERSION}_${os}_${arch}.${ext}"
+                   fi
+                   
+                   cp "$src" "./release-assets/$new_name"
+                   echo "Copied: $src -> ./release-assets/$new_name"
+               else
+                   local new_name="ConvertSave_${VERSION}_${os}_${arch}.${ext}"
+                   cp "$src" "./release-assets/$new_name"
+                   echo "Copied: $src -> ./release-assets/$new_name"
+               fi
             fi
-          done || true
+          }
 
-          find linux-build -type f -name "*.rpm" 2>/dev/null | while read file; do
-            if [ -f "$file" ]; then
-              filename=$(basename "$file")
-              if echo "$filename" | grep -q "x86_64"; then
-                arch="x86_64"
-              elif echo "$filename" | grep -q "aarch64\|arm64"; then
-                arch="arm64"
-              else
-                arch="x86_64"  # default
-              fi
-              new_name="ConvertSave_${VERSION}_Linux_${arch}.rpm"
-              cp "$file" "./release-assets/$new_name"
-              echo "Copied: $file -> ./release-assets/$new_name"
-            fi
-          done || true
+          # Linux
+          find linux-build -type f \( -name "*.deb" -o -name "*.rpm" -o -name "*.AppImage" -o -name "*.sig" \) 2>/dev/null | while read file; do
+            if echo "$file" | grep -q "amd64\|x86_64"; then arch="x86_64";
+            elif echo "$file" | grep -q "arm64\|aarch64"; then arch="arm64";
+            else arch="x86_64"; fi
+            
+            move_asset "$file" "" "Linux" "$arch"
+          done
 
-          find linux-build -type f -name "*.AppImage" 2>/dev/null | while read file; do
-            if [ -f "$file" ]; then
-              filename=$(basename "$file")
-              if echo "$filename" | grep -q "amd64\|x86_64"; then
-                arch="x86_64"
-              elif echo "$filename" | grep -q "aarch64\|arm64"; then
-                arch="arm64"
-              else
-                arch="x86_64"  # default
-              fi
-              new_name="ConvertSave_${VERSION}_Linux_${arch}.AppImage"
-              cp "$file" "./release-assets/$new_name"
-              echo "Copied: $file -> ./release-assets/$new_name"
-            fi
-          done || true
+          # macOS
+          find macos-build -type f \( -name "*.dmg" -o -name "*.sig" \) 2>/dev/null | while read file; do
+             if echo "$file" | grep -q "aarch64"; then arch="arm64";
+             elif echo "$file" | grep -q "x86_64"; then arch="x86_64";
+             else arch="universal"; fi
+             
+             move_asset "$file" "" "macOS" "$arch"
+          done
 
-          # macOS files - consistent naming: ConvertSave_VERSION_macOS_ARCH.dmg
-          find macos-build -type f -name "*.dmg" 2>/dev/null | while read file; do
-            if [ -f "$file" ]; then
-              # Detect architecture from path
-              if echo "$file" | grep -q "aarch64"; then
-                arch="arm64"
-              elif echo "$file" | grep -q "x86_64"; then
-                arch="x86_64"
-              else
-                arch="universal"  # fallback
-              fi
-              
-              new_name="ConvertSave_${VERSION}_macOS_${arch}.dmg"
-              cp "$file" "./release-assets/$new_name"
-              echo "Copied: $file -> ./release-assets/$new_name"
-            fi
-          done || true
+          # Windows
+          find windows-build -type f \( -name "*.msi" -o -name "*.exe" -o -name "*.sig" \) 2>/dev/null | while read file; do
+             if echo "$file" | grep -q "x64\|x86_64\|amd64"; then arch="x64";
+             elif echo "$file" | grep -q "arm64\|aarch64"; then arch="arm64";
+             else arch="x64"; fi
+             
+             move_asset "$file" "" "Windows" "$arch"
+          done
 
-          # Windows files - consistent naming: ConvertSave_VERSION_Windows_ARCH.ext
-          find windows-build -type f -name "*.msi" 2>/dev/null | while read file; do
-            if [ -f "$file" ]; then
-              filename=$(basename "$file")
-              # Windows builds are typically x64
-              if echo "$filename" | grep -q "x64\|x86_64\|amd64"; then
-                arch="x64"
-              elif echo "$filename" | grep -q "arm64\|aarch64"; then
-                arch="arm64"
-              else
-                arch="x64"  # default
-              fi
-              new_name="ConvertSave_${VERSION}_Windows_${arch}.msi"
-              cp "$file" "./release-assets/$new_name"
-              echo "Copied: $file -> ./release-assets/$new_name"
-            fi
-          done || true
-
-          find windows-build -type f -name "*.exe" 2>/dev/null | while read file; do
-            if [ -f "$file" ]; then
-              filename=$(basename "$file")
-              if echo "$filename" | grep -q "x64\|x86_64\|amd64"; then
-                arch="x64"
-              elif echo "$filename" | grep -q "arm64\|aarch64"; then
-                arch="arm64"
-              else
-                arch="x64"  # default
-              fi
-              new_name="ConvertSave_${VERSION}_Windows_${arch}.exe"
-              cp "$file" "./release-assets/$new_name"
-              echo "Copied: $file -> ./release-assets/$new_name"
-            fi
-          done || true
-
-          echo "=== Release assets ready ==="
           ls -lah ./release-assets/
 
-          # Check if we have any files
-          if [ -z "$(ls -A ./release-assets/)" ]; then
-            echo "ERROR: No release assets found!"
-            exit 1
-          fi
+      - name: Generate updater JSON
+        run: |
+          # Generate latest.json for Tauri updater
+          # Format:
+          # {
+          #   "version": "0.4.2",
+          #   "notes": "Release notes...",
+          #   "pub_date": "...",
+          #   "platforms": {
+          #     "darwin-aarch64": { "signature": "...", "url": "..." },
+          #     "darwin-x86_64": { "signature": "...", "url": "..." },
+          #     "linux-x86_64": { "signature": "...", "url": "..." },
+          #     "windows-x86_64": { "signature": "...", "url": "..." }
+          #   }
+          # }
 
-          # Remove original artifact directories to prevent double upload
-          rm -rf linux-build macos-build windows-build
+          node -e '
+            const fs = require("fs");
+            const path = require("path");
+            
+            const version = process.env.GITHUB_REF_NAME.replace(/^v/, "");
+            const assetsDir = "./release-assets";
+            const repo = "Hunter-Boone/ConvertSave-Support"; // Target repo
+            
+            const platforms = {};
+            
+            const files = fs.readdirSync(assetsDir);
+            
+            files.forEach(file => {
+              if (file.endsWith(".sig")) return;
+              
+              const sigFile = file + ".sig";
+              if (!files.includes(sigFile)) return; // Skip if no signature
+              
+              const signature = fs.readFileSync(path.join(assetsDir, sigFile), "utf8").trim();
+              const url = `https://github.com/${repo}/releases/download/${process.env.GITHUB_REF_NAME}/${file}`;
+              
+              let platformKey = "";
+              
+              // Map our filenames to Tauri platform keys
+              if (file.includes("macOS_arm64.dmg")) platformKey = "darwin-aarch64";
+              else if (file.includes("macOS_x86_64.dmg")) platformKey = "darwin-x86_64";
+              else if (file.includes("Linux_x86_64.AppImage")) platformKey = "linux-x86_64"; // AppImage is usually preferred for updater
+              else if (file.includes("Windows_x64.exe")) platformKey = "windows-x86_64"; // Setup exe preferred over MSI usually? Or MSI? Tauri supports both but setup exe (NSIS) is standard.
+              
+              // If we have a match
+              if (platformKey) {
+                platforms[platformKey] = {
+                  signature,
+                  url
+                };
+              }
+            });
+            
+            const manifest = {
+              version,
+              notes: "See release notes on GitHub.",
+              pub_date: new Date().toISOString(),
+              platforms
+            };
+            
+            fs.writeFileSync("./release-assets/latest.json", JSON.stringify(manifest, null, 2));
+            console.log("Generated latest.json:", JSON.stringify(manifest, null, 2));
+          '
 
-      - name: Create Release
+      - name: Create Release in Support Repo
         uses: softprops/action-gh-release@v1
         with:
           files: ./release-assets/*
           name: ConvertSave ${{ github.ref_name }}
+          repository: Hunter-Boone/ConvertSave-Support
+          token: ${{ secrets.SUPPORT_REPO_TOKEN }}
           body: |
             ## ConvertSave ${{ github.ref_name }}
 
-            A local file conversion utility with support for images, videos, audio, and documents.
-
             ### Downloads
-            - **Windows**: `ConvertSave_*_Windows_x64.msi` or `ConvertSave_*_Windows_x64.exe`
-            - **macOS Intel**: `ConvertSave_*_macOS_x86_64.dmg` for Intel Macs
-            - **macOS Apple Silicon**: `ConvertSave_*_macOS_arm64.dmg` for M1/M2/M3 Macs
-            - **Linux**: `ConvertSave_*_Linux_x86_64.deb`, `.rpm`, or `.AppImage`
+            - **Windows**: `ConvertSave_*_Windows_x64.exe`
+            - **macOS Intel**: `ConvertSave_*_macOS_x86_64.dmg`
+            - **macOS Apple Silicon**: `ConvertSave_*_macOS_arm64.dmg`
+            - **Linux**: `ConvertSave_*_Linux_x86_64.AppImage`
 
-            ### Features
-            - Convert images, videos, audio, and documents
-            - Batch conversion support
-            - On-demand tool downloads (FFmpeg, Pandoc)
-            - No bundled binaries - GPL compliant
-            - Modern UI with drag & drop
-            - Cross-platform support
-
-            ### Important Notes
-            - **Tools are NOT bundled**: FFmpeg and Pandoc are downloaded on first use
-            - **Small installer size**: ~5-10 MB (vs 100+ MB with bundled tools)
-            - **GPL Compliant**: Downloads tools from official sources
-            - See `NOTICE.md` for license information
-
-            **Full Changelog**: https://github.com/${{ github.repository }}/compare/${{ github.event.repository.default_branch }}...${{ github.ref_name }}
+            See the full changelog and details in the application.
           draft: false
           prerelease: ${{ contains(github.ref_name, 'alpha') || contains(github.ref_name, 'beta') || contains(github.ref_name, 'rc') }}
           generate_release_notes: true
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
