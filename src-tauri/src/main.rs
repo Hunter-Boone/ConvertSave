@@ -1475,39 +1475,89 @@ async fn execute_conversion(
             
             // AVIF codec options must come AFTER inputs and filters
             if output_ext == "avif" {
-                // AVIF uses libaom-av1 or libsvtav1 codec
-                command.arg("-c:v").arg("libaom-av1");
-                command.arg("-crf").arg("30");
+                // Clear previous arguments to ensure correct order for AVIF
+                // We need to restructure the command completely for AVIF
+                // Logic below handles the reconstruction
+            } else {
+                // For non-AVIF formats, add the input argument here if not already added
+                // (Note: we already added -i input_path above, so this else block is just a placeholder concept)
             }
-            
-            // ICO format requires resizing to max 256x256
-            if output_ext == "ico" {
-                command.arg("-vf");
-                command.arg("scale='min(256,iw)':'min(256,ih)':force_original_aspect_ratio=decrease");
-            }
-            
-            // Add advanced options if provided
-            if let Some(options) = advanced_options {
-                let options_parts: Vec<&str> = options.split_whitespace().collect();
-                for part in options_parts {
-                    command.arg(part);
+
+            // AVIF Special Handling based on platform and transparency
+            if output_ext == "avif" {
+                // Reset command arguments for AVIF to ensure correct order
+                // We need to rebuild the command from scratch because AVIF requires specific parameter ordering
+                command = create_command(&tool_path);
+                
+                // Add input file
+                command.arg("-i").arg(input_path);
+
+                // Check for transparency
+                let has_alpha = has_transparency(input_path);
+                
+                if has_alpha {
+                    // Transparent AVIF settings
+                    command.arg("-map").arg("0:v").arg("-map").arg("0:v");
+                    command.arg("-filter:v:1").arg("alphaextract");
+                    command.arg("-frames:v").arg("1");
+                    command.arg("-c:v").arg("libaom-av1");
+                    command.arg("-still-picture").arg("1");
+                    command.arg("-cpu-used").arg("6");
+                    command.arg("-crf").arg("28");
+                    command.arg("-b:v").arg("0");
+                    command.arg("-row-mt").arg("1");
+                } else {
+                    // Non-transparent AVIF settings
+                    command.arg("-frames:v").arg("1");
+                    command.arg("-c:v").arg("libaom-av1");
+                    command.arg("-still-picture").arg("1");
+                    command.arg("-cpu-used").arg("6");
+                    command.arg("-crf").arg("28");
+                    command.arg("-b:v").arg("0");
+                    command.arg("-row-mt").arg("1");
                 }
+
+                // Add advanced options if provided
+                if let Some(options) = advanced_options {
+                    let options_parts: Vec<&str> = options.split_whitespace().collect();
+                    for part in options_parts {
+                        command.arg(part);
+                    }
+                }
+
+                command.arg("-y").arg(output_path);
+            } else {
+                // Standard handling for other formats (continuation of previous logic)
+                
+                // ICO format requires resizing to max 256x256
+                if output_ext == "ico" {
+                    command.arg("-vf");
+                    command.arg("scale='min(256,iw)':'min(256,ih)':force_original_aspect_ratio=decrease");
+                }
+                
+                // Add advanced options if provided
+                if let Some(options) = advanced_options {
+                    let options_parts: Vec<&str> = options.split_whitespace().collect();
+                    for part in options_parts {
+                        command.arg(part);
+                    }
+                }
+                
+                // For video/multi-frame input to single image output, specify one frame
+                let video_formats = ["mp4", "mov", "avi", "mkv", "webm", "flv", "wmv", "m4v", "mpg", "mpeg", "3gp", "ogv"];
+                let image_formats = ["jpg", "jpeg", "png", "webp", "bmp", "gif", "tiff", "tif", "ico"];
+                
+                if video_formats.contains(&input_ext.as_str()) && image_formats.contains(&output_ext.as_str()) {
+                    command.arg("-frames:v").arg("1");
+                }
+                
+                // For single image output, use -update flag to write one file (not a sequence)
+                if image_formats.contains(&output_ext.as_str()) {
+                    command.arg("-update").arg("1");
+                }
+                
+                command.arg("-y").arg(output_path); // -y to overwrite output file
             }
-            
-            // For video/multi-frame input to single image output, specify one frame
-            let video_formats = ["mp4", "mov", "avi", "mkv", "webm", "flv", "wmv", "m4v", "mpg", "mpeg", "3gp", "ogv"];
-            let image_formats = ["jpg", "jpeg", "png", "webp", "bmp", "gif", "tiff", "tif", "ico"];
-            
-            if video_formats.contains(&input_ext.as_str()) && image_formats.contains(&output_ext.as_str()) {
-                command.arg("-frames:v").arg("1");
-            }
-            
-            // For single image output, use -update flag to write one file (not a sequence)
-            if image_formats.contains(&output_ext.as_str()) {
-                command.arg("-update").arg("1");
-            }
-            
-            command.arg("-y").arg(output_path); // -y to overwrite output file
         }
         "pandoc" if ENABLE_PANDOC => {
             command.arg(input_path).arg("-o").arg(output_path);
