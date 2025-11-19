@@ -484,7 +484,12 @@ function App() {
           failureCount++;
           // Store the first error message to show to the user
           if (!firstErrorMessage) {
-            firstErrorMessage = String(error);
+            const errorString = String(error);
+            if (errorString.includes("system cannot find the file")) {
+              firstErrorMessage = "Failed to convert all files. File not found.";
+            } else {
+              firstErrorMessage = errorString;
+            }
           }
         }
 
@@ -502,11 +507,15 @@ function App() {
           message: `Converted ${successCount} file(s), ${failureCount} failed. Error: ${firstErrorMessage}`,
         });
       } else {
+        // If we have a specific error message (like file not found), use it
+        // Otherwise fallback to generic message
         setConversionResult({
           success: false,
           message:
-            firstErrorMessage ||
-            `Failed to convert all files. Some formats may not support conversion to ${selectedFormat.toUpperCase()}.`,
+            firstErrorMessage === "Failed to convert all files. File not found."
+              ? firstErrorMessage
+              : firstErrorMessage ||
+                `Failed to convert all files. Some formats may not support conversion to ${selectedFormat.toUpperCase()}.`,
         });
       }
     } catch (error) {
