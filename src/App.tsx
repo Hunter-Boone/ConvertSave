@@ -427,10 +427,7 @@ function App() {
         // Update selected format if current one is not available or empty
         if (sortedFormats.length === 0) {
           setSelectedFormat("");
-        } else if (
-          !selectedFormat ||
-          !sortedFormats.includes(selectedFormat)
-        ) {
+        } else if (!selectedFormat || !sortedFormats.includes(selectedFormat)) {
           setSelectedFormat(sortedFormats[0]);
         }
       } catch (error) {
@@ -508,7 +505,8 @@ function App() {
           if (!firstErrorMessage) {
             const errorString = String(error);
             if (errorString.includes("system cannot find the file")) {
-              firstErrorMessage = "Failed to convert all files. File not found.";
+              firstErrorMessage =
+                "Failed to convert all files. File not found.";
             } else {
               firstErrorMessage = errorString;
             }
@@ -730,7 +728,6 @@ function App() {
       console.error("Error opening file dialog:", error);
     }
   };
-
 
   // ========== CUSTOM TITLE BAR COMPONENTS (COMMENTED OUT FOR NATIVE DECORATIONS) ==========
   // Uncomment these components to restore platform-specific custom window controls
@@ -983,7 +980,7 @@ function App() {
           >
             Settings
           </button>
-          
+
           {updateAvailable && (
             <button
               onClick={handleUpdateApp}
@@ -1003,13 +1000,17 @@ function App() {
             value={selectedFormat}
             onChange={setSelectedFormat}
             options={availableFormats}
-            disabled={selectedFiles.length === 0 || availableFormats.length === 0}
+            disabled={
+              selectedFiles.length === 0 || availableFormats.length === 0
+            }
             placeholder="No Formats"
           />
 
           <button
             onClick={handleConvert}
-            disabled={selectedFiles.length === 0 || isConverting || !selectedFormat}
+            disabled={
+              selectedFiles.length === 0 || isConverting || !selectedFormat
+            }
             className={`btn-chunky border-2 border-dark-purple px-8 py-2 ${
               selectedFiles.length === 0 || isConverting || !selectedFormat
                 ? "bg-lighter-bg border-secondary text-secondary cursor-not-allowed"
