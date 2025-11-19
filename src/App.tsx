@@ -335,7 +335,7 @@ function App() {
 
         // Combine all formats from all file types
         const allFormats = Array.from(new Set(formatsByExtension.flat()));
-        
+
         // Sort formats by popularity - most popular formats first
         const formatPopularity: Record<string, number> = {
           // Images - most popular first
@@ -351,7 +351,7 @@ function App() {
           ico: 10,
           heic: 11,
           raw: 12,
-          
+
           // Videos
           mp4: 20,
           webm: 21,
@@ -364,7 +364,7 @@ function App() {
           mpg: 28,
           mpeg: 29,
           "3gp": 30,
-          
+
           // Audio
           mp3: 40,
           wav: 41,
@@ -373,7 +373,7 @@ function App() {
           m4a: 44,
           aac: 45,
           wma: 46,
-          
+
           // Documents
           pdf: 60,
           docx: 61,
@@ -384,32 +384,32 @@ function App() {
           html: 66,
           htm: 67,
           epub: 68,
-          
+
           // Spreadsheets
           xlsx: 80,
           xls: 81,
           csv: 82,
           ods: 83,
-          
+
           // Presentations
           pptx: 100,
           ppt: 101,
           odp: 102,
         };
-        
+
         // Sort formats: known formats by popularity, unknown formats at the end alphabetically
         const sortedFormats = allFormats.sort((a, b) => {
           const aPopularity = formatPopularity[a.toLowerCase()] ?? 9999;
           const bPopularity = formatPopularity[b.toLowerCase()] ?? 9999;
-          
+
           if (aPopularity !== bPopularity) {
             return aPopularity - bPopularity;
           }
-          
+
           // If both have same popularity (or both unknown), sort alphabetically
           return a.localeCompare(b);
         });
-        
+
         setAvailableFormats(sortedFormats);
 
         // Update selected format if current one is not available or empty
@@ -507,7 +507,9 @@ function App() {
       } else {
         setConversionResult({
           success: false,
-          message: firstErrorMessage || `Failed to convert all files. Some formats may not support conversion to ${selectedFormat.toUpperCase()}.`,
+          message:
+            firstErrorMessage ||
+            `Failed to convert all files. Some formats may not support conversion to ${selectedFormat.toUpperCase()}.`,
         });
       }
     } catch (error) {
@@ -971,7 +973,7 @@ function App() {
             onChange={setSelectedFormat}
             options={availableFormats}
             disabled={selectedFiles.length === 0}
-            placeholder="N/A"
+            placeholder="No Formats"
           />
 
           <button
@@ -979,7 +981,7 @@ function App() {
             disabled={selectedFiles.length === 0 || isConverting}
             className={`btn-chunky border-2 border-dark-purple px-8 py-2 ${
               selectedFiles.length === 0 || isConverting
-                ? "bg-lighter-bg text-secondary cursor-not-allowed"
+                ? "bg-lighter-bg border-secondary text-secondary cursor-not-allowed"
                 : "bg-mint-accent text-dark-purple hover:bg-opacity-80"
             }`}
           >
@@ -1103,7 +1105,7 @@ function App() {
           {selectedFiles.length > 0 && (
             <div className="space-y-4">
               <div className="flex items-center justify-between">
-                <h2 className="text-xl font-bold text-primary">Images</h2>
+                <h2 className="text-xl font-bold text-primary">Files</h2>
                 <button
                   onClick={clearAllFiles}
                   className="btn-chunky bg-white border-2 border-dark-purple text-dark-purple px-4 py-2 hover:bg-light-bg"

@@ -260,11 +260,35 @@ fn get_available_formats(input_extension: String) -> Vec<ConversionOption> {
         }
         "png" | "jpg" | "jpeg" | "bmp" | "tiff" | "webp" | "gif" | "heic" | "heif" | "avif" | "tga" | "ppm" | "pgm" | "pbm" | "pam" | "xbm" | "xpm" | "dds" | "dpx" | "exr" | "hdr" | "ico" | "j2k" | "jp2" | "pcx" | "pfm" | "sgi" | "sun" | "xwd" => {
             // Standard formats
+            // JPG <-> JPEG simple rename conversions
+            if input_extension == "jpg" {
+                options.push(ConversionOption {
+                    format: "jpeg".to_string(),
+                    tool: "rename".to_string(),
+                    display_name: "JPEG (rename extension)".to_string(),
+                    color: "yellow".to_string(),
+                });
+            }
+            if input_extension == "jpeg" {
+                options.push(ConversionOption {
+                    format: "jpg".to_string(),
+                    tool: "rename".to_string(),
+                    display_name: "JPG (rename extension)".to_string(),
+                    color: "yellow".to_string(),
+                });
+            }
+            
             if input_extension != "jpg" && input_extension != "jpeg" {
                 options.push(ConversionOption {
                     format: "jpg".to_string(),
                     tool: "ffmpeg".to_string(),
-                    display_name: "JPEG Image".to_string(),
+                    display_name: "JPEG Image (.jpg)".to_string(),
+                    color: "yellow".to_string(),
+                });
+                options.push(ConversionOption {
+                    format: "jpeg".to_string(),
+                    tool: "ffmpeg".to_string(),
+                    display_name: "JPEG Image (.jpeg)".to_string(),
                     color: "yellow".to_string(),
                 });
             }
@@ -690,6 +714,11 @@ async fn open_folder(path: String) -> Result<(), String> {
 }
 
 fn determine_conversion_tool(input_ext: &str, output_ext: &str) -> Option<&'static str> {
+    // JPG <-> JPEG simple rename (no conversion needed, same format)
+    if (input_ext == "jpg" && output_ext == "jpeg") || (input_ext == "jpeg" && output_ext == "jpg") {
+        return Some("rename");
+    }
+    
     // Image conversions - ImageMagick supports the widest range of formats
     // FFmpeg is used as fallback for some formats
     let image_inputs = [
@@ -1200,6 +1229,14 @@ async fn execute_conversion(
     output_path: &PathBuf,
     advanced_options: Option<String>,
 ) -> Result<(), String> {
+    // Handle special "rename" tool for JPG <-> JPEG conversions
+    if tool_name == "rename" {
+        info!("Performing file rename/copy from {} to {}", input_path.display(), output_path.display());
+        std::fs::copy(input_path, output_path)
+            .map_err(|e| format!("Failed to copy file: {}", e))?;
+        return Ok(());
+    }
+    
     // Determine the actual tool to use (with ImageMagick fallback logic)
     let (actual_tool, tool_path) = match get_tool_path(tool_name) {
         Ok(path) => (tool_name, path),

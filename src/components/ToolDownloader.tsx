@@ -3,7 +3,12 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { open } from "@tauri-apps/plugin-dialog";
 import { Check, X, Loader, ChevronDown, ChevronUp } from "lucide-react";
-import { LGPL_V3_LICENSE, GPL_V3_LICENSE, IMAGEMAGICK_LICENSE, LUCIDE_LICENSE } from "../lib/licenses";
+import {
+  LGPL_V3_LICENSE,
+  GPL_V3_LICENSE,
+  IMAGEMAGICK_LICENSE,
+  LUCIDE_LICENSE,
+} from "../lib/licenses";
 
 interface ToolStatus {
   ffmpeg: {
@@ -121,9 +126,9 @@ export default function ToolDownloader({
     try {
       if (toolName === "ffmpeg") {
         await invoke("download_ffmpeg");
-      // DISABLED: Pandoc functionality temporarily disabled
-      // } else if (toolName === "pandoc") {
-      //   await invoke("download_pandoc");
+        // DISABLED: Pandoc functionality temporarily disabled
+        // } else if (toolName === "pandoc") {
+        //   await invoke("download_pandoc");
       } else if (toolName === "imagemagick") {
         await invoke("download_imagemagick");
       }
@@ -151,18 +156,18 @@ export default function ToolDownloader({
       if (selected && typeof selected === "string") {
         setError(null);
         setSuccessMessage(null);
-        
+
         try {
           await invoke("set_custom_tool_path", {
             toolName,
             path: selected,
           });
-          
+
           setSuccessMessage(`Custom path set for ${toolName}`);
-          
+
           // Refresh tool status to reflect the change
           checkToolsStatus();
-          
+
           // Clear success message after a delay
           setTimeout(() => {
             setSuccessMessage(null);
@@ -180,10 +185,10 @@ export default function ToolDownloader({
     try {
       await invoke("clear_custom_tool_path", { toolName });
       setSuccessMessage(`Using default path for ${toolName}`);
-      
+
       // Refresh tool status to reflect the change
       checkToolsStatus();
-      
+
       // Clear success message after a delay
       setTimeout(() => {
         setSuccessMessage(null);
@@ -210,7 +215,9 @@ export default function ToolDownloader({
 
   const handleCloseClick = () => {
     if (!coreToolsReady) {
-      setError("At least one conversion tool must be installed before you can use ConvertSave.");
+      setError(
+        "At least one conversion tool must be installed before you can use ConvertSave."
+      );
       // Clear the error after a few seconds
       setTimeout(() => {
         setError(null);
@@ -224,11 +231,11 @@ export default function ToolDownloader({
     <>
       {/* Licenses Modal */}
       {showLicensesModal && (
-        <div 
+        <div
           className="fixed inset-0 z-[200] flex items-center justify-center bg-dark-purple bg-opacity-50"
           onClick={() => setShowLicensesModal(false)}
         >
-          <div 
+          <div
             className="bg-white rounded-xl shadow-2xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-hidden flex flex-col"
             onClick={(e) => e.stopPropagation()}
           >
@@ -243,12 +250,14 @@ export default function ToolDownloader({
                 <X className="w-5 h-5 text-dark-purple" />
               </button>
             </div>
-            
+
             {/* Modal Content */}
             <div className="flex-1 overflow-y-auto p-6 space-y-4">
               {/* GNU LGPLv3 */}
               <button
-                onClick={() => setExpandedLicense(expandedLicense === "lgpl" ? null : "lgpl")}
+                onClick={() =>
+                  setExpandedLicense(expandedLicense === "lgpl" ? null : "lgpl")
+                }
                 className="w-full p-4 bg-white border-2 border-dark-purple rounded-xl flex items-center justify-between hover:bg-light-bg transition-colors"
               >
                 <span className="font-bold text-dark-purple">GNU LGPLv3</span>
@@ -266,7 +275,9 @@ export default function ToolDownloader({
 
               {/* GNU GPLv3 */}
               <button
-                onClick={() => setExpandedLicense(expandedLicense === "gpl" ? null : "gpl")}
+                onClick={() =>
+                  setExpandedLicense(expandedLicense === "gpl" ? null : "gpl")
+                }
                 className="w-full p-4 bg-white border-2 border-dark-purple rounded-xl flex items-center justify-between hover:bg-light-bg transition-colors"
               >
                 <span className="font-bold text-dark-purple">GNU GPLv3</span>
@@ -284,10 +295,16 @@ export default function ToolDownloader({
 
               {/* ImageMagick License */}
               <button
-                onClick={() => setExpandedLicense(expandedLicense === "imagemagick" ? null : "imagemagick")}
+                onClick={() =>
+                  setExpandedLicense(
+                    expandedLicense === "imagemagick" ? null : "imagemagick"
+                  )
+                }
                 className="w-full p-4 bg-white border-2 border-dark-purple rounded-xl flex items-center justify-between hover:bg-light-bg transition-colors"
               >
-                <span className="font-bold text-dark-purple">ImageMagick License</span>
+                <span className="font-bold text-dark-purple">
+                  ImageMagick License
+                </span>
                 {expandedLicense === "imagemagick" ? (
                   <ChevronUp className="w-5 h-5 text-dark-purple" />
                 ) : (
@@ -302,10 +319,16 @@ export default function ToolDownloader({
 
               {/* Lucide License */}
               <button
-                onClick={() => setExpandedLicense(expandedLicense === "lucide" ? null : "lucide")}
+                onClick={() =>
+                  setExpandedLicense(
+                    expandedLicense === "lucide" ? null : "lucide"
+                  )
+                }
                 className="w-full p-4 bg-white border-2 border-dark-purple rounded-xl flex items-center justify-between hover:bg-light-bg transition-colors"
               >
-                <span className="font-bold text-dark-purple">Lucide License (ISC/MIT)</span>
+                <span className="font-bold text-dark-purple">
+                  Lucide License (ISC/MIT)
+                </span>
                 {expandedLicense === "lucide" ? (
                   <ChevronUp className="w-5 h-5 text-dark-purple" />
                 ) : (
@@ -338,12 +361,24 @@ export default function ToolDownloader({
             aria-label="View Logs"
             title="Open log directory"
           >
-            <svg className="w-5 h-5 text-dark-purple mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            <svg
+              className="w-5 h-5 text-dark-purple mr-2"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+              />
             </svg>
-            <span className="text-sm font-bold text-dark-purple">View Logs</span>
+            <span className="text-sm font-bold text-dark-purple">
+              View Logs
+            </span>
           </button>
-          
+
           {/* Close Button */}
           <button
             onClick={handleCloseClick}
@@ -365,7 +400,8 @@ export default function ToolDownloader({
                   Welcome to ConvertSave!
                 </h1>
                 <p className="text-lg text-secondary">
-                  To get started, you need to install at least one conversion tool.
+                  To get started, you need to install at least one conversion
+                  tool.
                 </p>
               </div>
 
@@ -392,7 +428,7 @@ export default function ToolDownloader({
                         )}
                       </div>
                       <p className="text-secondary">
-                        Used to convert most images formats.
+                        Used to convert most image formats.
                       </p>
                     </div>
                     {!toolStatus.ffmpeg.available && (
@@ -412,7 +448,7 @@ export default function ToolDownloader({
                       </button>
                     )}
                   </div>
-                  
+
                   {/* Advanced Section */}
                   <button
                     onClick={() => setFfmpegAdvancedOpen(!ffmpegAdvancedOpen)}
@@ -425,20 +461,21 @@ export default function ToolDownloader({
                       <ChevronDown className="w-4 h-4" />
                     )}
                   </button>
-                  
+
                   {ffmpegAdvancedOpen && (
                     <div className="mt-4 p-4 bg-light-bg rounded-lg space-y-3">
                       <p className="text-sm text-secondary">
-                        You can also download FFmpeg directly and select a custom path.
+                        You can also download FFmpeg directly and select a
+                        custom path.
                       </p>
                       <div className="flex space-x-2">
-                        <button 
+                        <button
                           onClick={() => selectCustomPath("ffmpeg")}
                           className="btn-chunky bg-white border-2 border-dark-purple text-dark-purple px-4 py-2 text-sm hover:bg-light-bg"
                         >
                           Select Custom Path
                         </button>
-                        <button 
+                        <button
                           onClick={() => useDefaultPath("ffmpeg")}
                           className="btn-chunky bg-white border-2 border-dark-purple text-dark-purple px-4 py-2 text-sm hover:bg-light-bg"
                         >
@@ -454,9 +491,9 @@ export default function ToolDownloader({
                   )}
                 </div>
 
-              {/* DISABLED: Pandoc functionality temporarily disabled */}
-              {/* {/* Pandoc Card */}
-              {/* <div className="bg-white border-2 border-light-purple rounded-xl p-6">
+                {/* DISABLED: Pandoc functionality temporarily disabled */}
+                {/* {/* Pandoc Card */}
+                {/* <div className="bg-white border-2 border-light-purple rounded-xl p-6">
                 <div className="flex items-center justify-between">
                   <div className="flex-1">
                     <div className="flex items-center space-x-3 flex-wrap">
@@ -566,10 +603,12 @@ export default function ToolDownloader({
                       </button>
                     )}
                   </div>
-                  
+
                   {/* Advanced Section */}
                   <button
-                    onClick={() => setImagemagickAdvancedOpen(!imagemagickAdvancedOpen)}
+                    onClick={() =>
+                      setImagemagickAdvancedOpen(!imagemagickAdvancedOpen)
+                    }
                     className="flex items-center space-x-2 text-dark-purple font-bold hover:text-secondary transition-colors"
                   >
                     <span>Advanced</span>
@@ -579,20 +618,21 @@ export default function ToolDownloader({
                       <ChevronDown className="w-4 h-4" />
                     )}
                   </button>
-                  
+
                   {imagemagickAdvancedOpen && (
                     <div className="mt-4 p-4 bg-light-bg rounded-lg space-y-3">
                       <p className="text-sm text-secondary">
-                        You can also download ImageMagick directly and select a custom path.
+                        You can also download ImageMagick directly and select a
+                        custom path.
                       </p>
                       <div className="flex space-x-2">
-                        <button 
+                        <button
                           onClick={() => selectCustomPath("imagemagick")}
                           className="btn-chunky bg-white border-2 border-dark-purple text-dark-purple px-4 py-2 text-sm hover:bg-light-bg"
                         >
                           Select Custom Path
                         </button>
-                        <button 
+                        <button
                           onClick={() => useDefaultPath("imagemagick")}
                           className="btn-chunky bg-white border-2 border-dark-purple text-dark-purple px-4 py-2 text-sm hover:bg-light-bg"
                         >
@@ -641,7 +681,9 @@ export default function ToolDownloader({
                 <div className="bg-mint-accent border-2 border-dark-purple rounded-xl p-4 relative">
                   <div className="flex items-center space-x-3 pr-8">
                     <Check className="w-5 h-5 text-dark-purple" />
-                    <p className="font-bold text-dark-purple">{successMessage}</p>
+                    <p className="font-bold text-dark-purple">
+                      {successMessage}
+                    </p>
                   </div>
                   <button
                     onClick={() => setSuccessMessage(null)}
@@ -673,30 +715,43 @@ export default function ToolDownloader({
               {/* License & Attribution Section */}
               <div className="space-y-2">
                 <button
-                  onClick={() => setLicenseAttributionOpen(!licenseAttributionOpen)}
+                  onClick={() =>
+                    setLicenseAttributionOpen(!licenseAttributionOpen)
+                  }
                   className="w-full p-4 bg-lighter-bg rounded-xl flex items-center justify-between hover:bg-muted-bg transition-colors"
                 >
-                  <span className="font-bold text-dark-purple">License & Attribution</span>
+                  <span className="font-bold text-dark-purple">
+                    License & Attribution
+                  </span>
                   {licenseAttributionOpen ? (
                     <ChevronUp className="w-5 h-5 text-dark-purple" />
                   ) : (
                     <ChevronDown className="w-5 h-5 text-dark-purple" />
                   )}
                 </button>
-                
+
                 {licenseAttributionOpen && (
                   <div className="p-6 bg-lighter-bg rounded-xl space-y-6 text-sm text-secondary">
                     <p>
-                      The following tools are downloaded separately and from official sources in order to comply with their respective licenses.
+                      The following tools are downloaded separately and from
+                      official sources in order to comply with their respective
+                      licenses.
                     </p>
 
                     <div className="space-y-3">
                       <h3 className="font-bold text-dark-purple">FFmpeg</h3>
                       <p>
-                        FFmpeg is the leading multimedia framework, able to decode, encode, transcode, mux, demux, stream, filter and play pretty much anything that humans and machines have created.
+                        FFmpeg is the leading multimedia framework, able to
+                        decode, encode, transcode, mux, demux, stream, filter
+                        and play pretty much anything that humans and machines
+                        have created.
                       </p>
                       <p>
-                        FFmpeg is licensed under the GNU Lesser General Public License (LGPL) version 2.1 or later. However, FFmpeg incorporates several optional parts and optimizations that are covered by the GNU General Public License (GPL) version 2 or later. For more information, visit{" "}
+                        FFmpeg is licensed under the GNU Lesser General Public
+                        License (LGPL) version 2.1 or later. However, FFmpeg
+                        incorporates several optional parts and optimizations
+                        that are covered by the GNU General Public License (GPL)
+                        version 2 or later. For more information, visit{" "}
                         <a
                           href="https://www.ffmpeg.org/legal.html"
                           target="_blank"
@@ -708,17 +763,22 @@ export default function ToolDownloader({
                         .
                       </p>
                       <p>
-                        FFmpeg is a trademark of Fabrice Bellard, originator of the FFmpeg project.
+                        FFmpeg is a trademark of Fabrice Bellard, originator of
+                        the FFmpeg project.
                       </p>
                     </div>
 
                     <div className="space-y-3">
-                      <h3 className="font-bold text-dark-purple">ImageMagick</h3>
+                      <h3 className="font-bold text-dark-purple">
+                        ImageMagick
+                      </h3>
                       <p>
-                        ImageMagick is a free, open-source software suite, used for editing and manipulating digital images.
+                        ImageMagick is a free, open-source software suite, used
+                        for editing and manipulating digital images.
                       </p>
                       <p>
-                        ImageMagick is licensed under the ImageMagick License. For more information, visit{" "}
+                        ImageMagick is licensed under the ImageMagick License.
+                        For more information, visit{" "}
                         <a
                           href="https://imagemagick.org/script/license.php"
                           target="_blank"
@@ -730,7 +790,9 @@ export default function ToolDownloader({
                         .
                       </p>
                       <p>
-                        Copyright © 1999 ImageMagick Studio LLC, a non-profit organization dedicated to making software imaging solutions freely available.
+                        Copyright © 1999 ImageMagick Studio LLC, a non-profit
+                        organization dedicated to making software imaging
+                        solutions freely available.
                       </p>
                     </div>
 
@@ -757,11 +819,12 @@ export default function ToolDownloader({
                     <ChevronDown className="w-5 h-5 text-dark-purple" />
                   )}
                 </button>
-                
+
                 {aboutOpen && (
                   <div className="p-6 bg-lighter-bg rounded-xl text-sm text-secondary">
                     <p>
-                      ConvertSave helps you quickly convert images locally on your computer.
+                      ConvertSave helps you quickly convert images locally on
+                      your computer.
                     </p>
                   </div>
                 )}
