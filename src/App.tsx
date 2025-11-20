@@ -438,6 +438,23 @@ function App() {
     loadFormats();
   }, [selectedFiles]);
 
+  // Auto-hide success message after 5 seconds
+  useEffect(() => {
+    if (conversionResult?.success) {
+      const timer = setTimeout(() => {
+        setConversionResult(null);
+      }, 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [conversionResult]);
+
+  // Clear message when files change (add/remove)
+  useEffect(() => {
+    if (conversionResult) {
+      setConversionResult(null);
+    }
+  }, [selectedFiles]);
+
   const checkToolsStatus = async () => {
     try {
       const status = await invoke<ToolStatus>("check_tools_status");
@@ -1025,10 +1042,8 @@ function App() {
       {/* Main Content Area */}
       <div className="flex-1 overflow-y-auto overflow-x-hidden">
         <div
-          className={`${
-            selectedFiles.length === 0
-              ? "h-full flex flex-col px-6 pb-6"
-              : "px-6 pb-6 space-y-6"
+          className={`px-6 pb-6 space-y-6 ${
+            selectedFiles.length === 0 ? "h-full flex flex-col" : ""
           }`}
         >
           {/* Show drag zone when no files are selected, or a smaller version when files are present */}
