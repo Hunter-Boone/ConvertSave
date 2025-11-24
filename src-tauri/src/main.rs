@@ -130,7 +130,6 @@ async fn install_app_update(app: AppHandle) -> Result<(), String> {
                     
                     info!("Update installed successfully, restarting...");
                     app.restart();
-                    Ok(())
                 }
                 Ok(None) => Err("No update available".to_string()),
                 Err(e) => Err(format!("Failed to check for updates: {}", e)),
