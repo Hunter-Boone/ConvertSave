@@ -81,8 +81,10 @@ jobs:
           path: |
             src-tauri/target/x86_64-apple-darwin/release/bundle/dmg/*.dmg
             src-tauri/target/aarch64-apple-darwin/release/bundle/dmg/*.dmg
-            src-tauri/target/x86_64-apple-darwin/release/bundle/dmg/*.sig
-            src-tauri/target/aarch64-apple-darwin/release/bundle/dmg/*.sig
+            src-tauri/target/x86_64-apple-darwin/release/bundle/macos/*.tar.gz
+            src-tauri/target/aarch64-apple-darwin/release/bundle/macos/*.tar.gz
+            src-tauri/target/x86_64-apple-darwin/release/bundle/macos/*.sig
+            src-tauri/target/aarch64-apple-darwin/release/bundle/macos/*.sig
 
       - name: Upload artifacts (Linux)
         if: matrix.platform == 'ubuntu-latest' && startsWith(github.ref, 'refs/tags/v')
@@ -140,7 +142,12 @@ jobs:
             local arch="$4"
             
             if [ -f "$src" ]; then
+               # Handle .tar.gz specially
                local ext="${src##*.}"
+               if [[ "$src" == *.tar.gz ]]; then
+                  ext="tar.gz"
+               fi
+               
                # If it's a signature file, keep .sig extension but match base name
                if [[ "$src" == *.sig ]]; then
                    # For sig files, we want file.ext.sig
@@ -161,11 +168,16 @@ jobs:
                       # The extension passed in was 'sig', so new_name is ...arch.sig
                       # That's not quite right, signatures are usually binary_filename.sig
                       
-                      # Let's assume src is like `bundle.dmg.sig`
-                      # We want `ConvertSave_...dmg.sig`
+                      # Let's assume src is like `bundle.dmg.sig` or `bundle.tar.gz.sig`
+                      # We want `ConvertSave_...dmg.sig` or `ConvertSave_...tar.gz.sig`
                       
-                      # Get the extension of the binary it signs (e.g., 'dmg' from 'dmg.sig')
-                      local bin_ext=$(echo "$src" | sed 's/\.sig$//' | sed 's/.*\.//')
+                      # Get the extension of the binary it signs
+                      local bin_ext
+                      if [[ "$src" == *.tar.gz.sig ]]; then
+                         bin_ext="tar.gz"
+                      else
+                         bin_ext=$(echo "$src" | sed 's/\.sig$//' | sed 's/.*\.//')
+                      fi
                       new_name="ConvertSave_${VERSION}_${os}_${arch}.${bin_ext}.sig"
                    else
                       new_name="ConvertSave_${VERSION}_${os}_${arch}.${ext}"
@@ -190,8 +202,8 @@ jobs:
             move_asset "$file" "" "Linux" "$arch"
           done
 
-          # macOS
-          find macos-build -type f \( -name "*.dmg" -o -name "*.sig" \) 2>/dev/null | while read file; do
+          # macOS - Use .tar.gz for updater, .dmg for manual downloads
+          find macos-build -type f \( -name "*.dmg" -o -name "*.tar.gz" -o -name "*.sig" \) 2>/dev/null | while read file; do
              if echo "$file" | grep -q "aarch64"; then arch="arm64";
              elif echo "$file" | grep -q "x86_64"; then arch="x86_64";
              else arch="universal"; fi
@@ -250,10 +262,11 @@ jobs:
               let platformKey = "";
               
               // Map our filenames to Tauri platform keys
-              if (file.includes("macOS_arm64.dmg")) platformKey = "darwin-aarch64";
-              else if (file.includes("macOS_x86_64.dmg")) platformKey = "darwin-x86_64";
-              else if (file.includes("Linux_x86_64.AppImage")) platformKey = "linux-x86_64"; // AppImage is usually preferred for updater
-              else if (file.includes("Windows_x64.exe")) platformKey = "windows-x86_64"; // Setup exe preferred over MSI usually? Or MSI? Tauri supports both but setup exe (NSIS) is standard.
+              // macOS uses .tar.gz for updater (not .dmg)
+              if (file.includes("macOS_arm64.tar.gz")) platformKey = "darwin-aarch64";
+              else if (file.includes("macOS_x86_64.tar.gz")) platformKey = "darwin-x86_64";
+              else if (file.includes("Linux_x86_64.AppImage")) platformKey = "linux-x86_64";
+              else if (file.includes("Windows_x64.exe")) platformKey = "windows-x86_64";
               
               // If we have a match
               if (platformKey) {
