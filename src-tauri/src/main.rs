@@ -78,7 +78,10 @@ fn save_config(config: &ToolConfig) -> Result<(), String> {
 
 /// Helper function to create a Command that doesn't show a console window on Windows
 fn create_command<S: AsRef<std::ffi::OsStr>>(program: S) -> Command {
+    #[cfg(target_os = "windows")]
     let mut command = Command::new(program);
+    #[cfg(not(target_os = "windows"))]
+    let command = Command::new(program);
     
     #[cfg(target_os = "windows")]
     {
@@ -3129,6 +3132,7 @@ async fn fetch_latest_pandoc_version() -> Result<String, String> {
 
 /// Fix hardcoded library paths in ImageMagick binary on macOS
 #[cfg(target_os = "macos")]
+#[allow(dead_code)]
 fn fix_imagemagick_library_paths(binary_path: &PathBuf, install_dir: &PathBuf) -> Result<(), String> {
     use std::process::Command;
     
@@ -3214,6 +3218,7 @@ fn fix_imagemagick_library_paths(binary_path: &PathBuf, install_dir: &PathBuf) -
 
 /// Fix library references within a dylib file
 #[cfg(target_os = "macos")]
+#[allow(dead_code)]
 fn fix_library_references(lib_path: &PathBuf, install_dir: &PathBuf) -> Result<(), String> {
     use std::process::Command;
     

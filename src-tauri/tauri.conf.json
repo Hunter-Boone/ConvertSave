@@ -28,6 +28,9 @@
   },
   "plugins": {
     "updater": {
+      "windows": {
+        "installMode": "passive"
+      },
       "endpoints": [
         "https://github.com/Hunter-Boone/ConvertSave-Support/releases/latest/download/latest.json"
       ],
