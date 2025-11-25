@@ -1001,7 +1001,7 @@ function App() {
           {updateAvailable && (
             <button
               onClick={handleUpdateApp}
-              className="btn-chunky bg-blue-accent border-2 border-dark-purple text-white px-6 py-2 hover:bg-opacity-80"
+              className="btn-chunky bg-pink border-2 border-dark-purple text-dark-purple px-6 py-2 hover:bg-opacity-80"
               title="A new version is available!"
             >
               Update Application
