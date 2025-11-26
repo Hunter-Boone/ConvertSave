@@ -51,6 +51,25 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Set dev version
+        shell: bash
+        run: |
+          # Use run number for consistent versioning across all platforms
+          VERSION="999.0.${{ github.run_number }}"
+          echo "DEV_VERSION=$VERSION" >> $GITHUB_ENV
+          echo "Setting dev version to: $VERSION"
+
+          # Update tauri.conf.dev.json with the new version
+          if [[ "$RUNNER_OS" == "Windows" ]]; then
+            sed -i "s/\"version\": \"[^\"]*\"/\"version\": \"$VERSION\"/" src-tauri/tauri.conf.dev.json
+          else
+            sed -i '' "s/\"version\": \"[^\"]*\"/\"version\": \"$VERSION\"/" src-tauri/tauri.conf.dev.json 2>/dev/null || \
+            sed -i "s/\"version\": \"[^\"]*\"/\"version\": \"$VERSION\"/" src-tauri/tauri.conf.dev.json
+          fi
+
+          echo "Updated tauri.conf.dev.json:"
+          grep '"version"' src-tauri/tauri.conf.dev.json
+
       - name: Build Tauri app (Windows/Linux)
         if: matrix.platform != 'macos-latest'
         env:
@@ -133,8 +152,8 @@ jobs:
           set -x
           mkdir -p ./release-assets
 
-          # Use a dev version based on commit
-          VERSION="dev-$(echo $GITHUB_SHA | cut -c1-7)"
+          # Use the same version as the build job (based on run number)
+          VERSION="999.0.${{ github.run_number }}"
           echo "VERSION=$VERSION" >> $GITHUB_ENV
           echo "Dev Version: $VERSION"
 
