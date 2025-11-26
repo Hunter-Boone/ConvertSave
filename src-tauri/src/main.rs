@@ -25,6 +25,18 @@ mod license;
 const ENABLE_PANDOC: bool = false;
 // ═══════════════════════════════════════════════════════════════════════════
 
+// ═══════════════════════════════════════════════════════════════════════════
+// APP IDENTIFIER - Different for dev and production builds
+// ═══════════════════════════════════════════════════════════════════════════
+/// Returns the app identifier based on build type
+/// Dev builds use "com.convertsave.dev", production uses "com.convertsave"
+#[cfg(feature = "dev-build")]
+const APP_IDENTIFIER: &str = "com.convertsave.dev";
+
+#[cfg(not(feature = "dev-build"))]
+const APP_IDENTIFIER: &str = "com.convertsave";
+// ═══════════════════════════════════════════════════════════════════════════
+
 // Windows-specific imports to hide console windows
 #[cfg(target_os = "windows")]
 use std::os::windows::process::CommandExt;
@@ -55,7 +67,7 @@ struct ToolConfig {
 /// Get the path to the config file
 fn get_config_path() -> Result<PathBuf, String> {
     let data_dir = dirs::data_dir().ok_or("Could not find data directory")?;
-    let config_dir = data_dir.join("com.convertsave");
+    let config_dir = data_dir.join(APP_IDENTIFIER);
     std::fs::create_dir_all(&config_dir).map_err(|e| e.to_string())?;
     Ok(config_dir.join("config.json"))
 }
@@ -971,20 +983,20 @@ fn get_tool_path(tool_name: &str) -> Result<PathBuf, String> {
     // so we manually construct the same path that Tauri uses
     if let Some(data_dir) = dirs::data_dir() {
         // Tauri's app_data_dir() uses: {data_dir}/{identifier}
-        // Our identifier from tauri.conf.json is "com.convertsave"
+        // APP_IDENTIFIER is "com.convertsave" for prod, "com.convertsave.dev" for dev
         
         // For ImageMagick on macOS, the binary is in bin/ subdirectory as per official structure
         #[cfg(target_os = "macos")]
         if tool_name == "imagemagick" {
             let app_data_path = data_dir
-                .join("com.convertsave")
+                .join(APP_IDENTIFIER)
                 .join(tool_name)
                 .join("bin")
                 .join(exe_name);
             possible_paths.push(app_data_path);
         } else {
             let app_data_path = data_dir
-                .join("com.convertsave")
+                .join(APP_IDENTIFIER)
                 .join(tool_name)
                 .join(exe_name);
             possible_paths.push(app_data_path);
@@ -994,7 +1006,7 @@ fn get_tool_path(tool_name: &str) -> Result<PathBuf, String> {
         #[cfg(not(target_os = "macos"))]
         {
             let app_data_path = data_dir
-                .join("com.convertsave")
+                .join(APP_IDENTIFIER)
                 .join(tool_name)
                 .join(exe_name);
             possible_paths.push(app_data_path);

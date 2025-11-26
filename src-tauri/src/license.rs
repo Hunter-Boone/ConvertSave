@@ -31,6 +31,13 @@ const API_BASE_URL: &str = match option_env!("CONVERTSAVE_API_URL") {
     None => "https://convertsave.com/api/license",
 };
 
+/// App identifier - different for dev and production builds
+#[cfg(feature = "dev-build")]
+const APP_IDENTIFIER: &str = "com.convertsave.dev";
+
+#[cfg(not(feature = "dev-build"))]
+const APP_IDENTIFIER: &str = "com.convertsave";
+
 /// Grace period in days before locking app after subscription expires
 const GRACE_PERIOD_DAYS: i64 = 2;
 
@@ -117,9 +124,10 @@ struct RefreshResponse {
 }
 
 /// Get the path to the license file
+/// Dev builds use com.convertsave.dev, production uses com.convertsave
 pub fn get_license_path() -> Result<PathBuf, String> {
     let data_dir = dirs::data_dir().ok_or("Could not find data directory")?;
-    let app_dir = data_dir.join("com.convertsave");
+    let app_dir = data_dir.join(APP_IDENTIFIER);
     fs::create_dir_all(&app_dir).map_err(|e| e.to_string())?;
     Ok(app_dir.join("license.dat"))
 }
