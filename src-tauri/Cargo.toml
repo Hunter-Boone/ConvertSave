@@ -48,3 +48,6 @@ custom-protocol = ["tauri/custom-protocol"]
 # Enable Pandoc document conversion support (disabled by default)
 # To enable: cargo build --features pandoc
 pandoc = []
+# Dev build with console window and debug tools
+# To enable: cargo build --features dev-build
+dev-build = []

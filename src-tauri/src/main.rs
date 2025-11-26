@@ -1,5 +1,9 @@
-// Prevents additional console window on Windows in release
-#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+// Prevents additional console window on Windows in release builds
+// Dev builds (with dev-build feature) will show console for debugging
+#![cfg_attr(
+    all(not(debug_assertions), not(feature = "dev-build"), target_os = "windows"),
+    windows_subsystem = "windows"
+)]
 
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;

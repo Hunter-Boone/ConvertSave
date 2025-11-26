@@ -19,7 +19,8 @@
         "resizable": true,
         "fullscreen": false,
         "center": true,
-        "decorations": true
+        "decorations": true,
+        "devtools": true
       }
     ],
     "security": {
@@ -47,7 +48,11 @@
       "icons-dev/256x256.png",
       "icons-dev/icon.icns",
       "icons-dev/icon.ico"
-    ]
+    ],
+    "windows": {
+      "nsis": {
+        "displayLanguageSelector": false
+      }
+    }
   }
 }
-
