@@ -201,9 +201,13 @@ pub fn decrypt_license(encrypted_license: &str) -> Result<LicenseData, String> {
 #[cfg(target_os = "windows")]
 pub fn get_mac_address() -> Result<String, String> {
     use std::process::Command;
+    use std::os::windows::process::CommandExt;
+    
+    const CREATE_NO_WINDOW: u32 = 0x08000000;
 
     let output = Command::new("getmac")
         .args(["/fo", "csv", "/nh"])
+        .creation_flags(CREATE_NO_WINDOW)
         .output()
         .map_err(|e| format!("Failed to get MAC address: {}", e))?;
 
