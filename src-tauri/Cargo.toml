@@ -1,6 +1,6 @@
 [package]
 name = "convertsave"
-version = "0.5.7"
+version = "0.6.0"
 description = "A local file conversion utility"
 authors = ["you"]
 edition = "2021"
