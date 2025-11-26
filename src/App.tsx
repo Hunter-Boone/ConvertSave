@@ -4,8 +4,20 @@ import { listen } from "@tauri-apps/api/event";
 import { open } from "@tauri-apps/plugin-dialog";
 import { X } from "lucide-react";
 import ToolDownloader from "./components/ToolDownloader";
+import LicenseActivation from "./components/LicenseActivation";
 import { CustomSelect } from "./components/CustomSelect";
 import { FileInfo } from "./types";
+
+// License status type from Rust
+interface LicenseStatus {
+  isValid: boolean;
+  isActivated: boolean;
+  planType: "monthly" | "yearly" | "lifetime" | null;
+  daysRemaining: number | null;
+  inGracePeriod: boolean;
+  error: string | null;
+  requiresActivation: boolean;
+}
 
 // FileItem component with thumbnail support
 function FileItem({
@@ -143,6 +155,12 @@ interface ToolStatus {
 }
 
 function App() {
+  // License state
+  const [licenseStatus, setLicenseStatus] = useState<LicenseStatus | null>(
+    null
+  );
+  const [licenseChecked, setLicenseChecked] = useState(false);
+
   const [selectedFiles, setSelectedFiles] = useState<FileInfo[]>([]);
   const [selectedFormat, setSelectedFormat] = useState<string>("");
   const [advancedOptions] = useState<string>("");
@@ -159,6 +177,37 @@ function App() {
   const [isDraggingOver, setIsDraggingOver] = useState(false);
   const [updateAvailable, setUpdateAvailable] = useState(false);
   const isProcessingDrop = useRef(false);
+
+  // Check license on startup
+  useEffect(() => {
+    const checkLicense = async () => {
+      try {
+        const status = await invoke<LicenseStatus>("check_license_status");
+        setLicenseStatus(status);
+      } catch (err) {
+        console.error("Failed to check license:", err);
+        // Assume needs activation if check fails
+        setLicenseStatus({
+          isValid: false,
+          isActivated: false,
+          planType: null,
+          daysRemaining: null,
+          inGracePeriod: false,
+          error: "Failed to check license status",
+          requiresActivation: true,
+        });
+      } finally {
+        setLicenseChecked(true);
+      }
+    };
+
+    checkLicense();
+  }, []);
+
+  // Handle successful license activation
+  const handleLicenseActivated = (status: LicenseStatus) => {
+    setLicenseStatus(status);
+  };
 
   useEffect(() => {
     const checkForAppUpdates = async () => {
@@ -885,12 +934,34 @@ function App() {
   // );
   // ========== END CUSTOM TITLE BAR COMPONENTS ==========
 
+  // Show loading state while checking license
+  if (!licenseChecked) {
+    return (
+      <div className="h-screen bg-light-bg flex items-center justify-center">
+        <div className="text-center space-y-4">
+          <div className="w-16 h-16 border-4 border-mint-accent border-t-transparent rounded-full animate-spin mx-auto"></div>
+          <p className="text-dark-purple font-bold">Checking license...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Show license activation screen if not licensed
+  if (!licenseStatus?.isValid || licenseStatus?.requiresActivation) {
+    return (
+      <LicenseActivation
+        onActivated={handleLicenseActivated}
+        initialError={licenseStatus?.error || undefined}
+      />
+    );
+  }
+
   // Show tool downloader if tools aren't ready OR if user manually opens tool manager
   if (toolsReady === false || showToolManager) {
     return <ToolDownloader onAllToolsReady={handleToolsReady} />;
   }
 
-  // Show loading state while checking
+  // Show loading state while checking tools
   if (toolsReady === null) {
     return (
       <div className="h-screen bg-light-bg flex items-center justify-center">

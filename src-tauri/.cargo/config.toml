@@ -1,0 +1,3 @@
+[env]
+CONVERTSAVE_API_URL = "http://localhost:3000/api/license"
+LICENSE_ENCRYPTION_KEY = "S9SpSaC5f1E4mZUVxv7RUTNl5DUKfDuR"

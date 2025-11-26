@@ -10,6 +10,9 @@ use tauri::{AppHandle, Emitter, Manager};
 use tauri_plugin_updater::UpdaterExt;
 use log::{info, error, warn, debug};
 
+// License management module
+mod license;
+
 // ═══════════════════════════════════════════════════════════════════════════
 // FEATURE TOGGLES - Set to `true` to enable, `false` to disable
 // ═══════════════════════════════════════════════════════════════════════════
@@ -3473,6 +3476,60 @@ fn extract_tar_gz(archive_path: &PathBuf, extract_dir: &PathBuf, binary_name: &s
     Err(format!("{} binary not found in archive", binary_name))
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// LICENSE COMMANDS
+// ═══════════════════════════════════════════════════════════════════════════
+
+/// Check the current license status
+/// Called on app startup to determine if user is licensed
+#[tauri::command]
+async fn check_license_status() -> Result<license::LicenseStatus, String> {
+    info!("Checking license status...");
+    let status = license::check_license_status().await;
+    info!("License status: {:?}", status);
+    Ok(status)
+}
+
+/// Activate the app with a product key
+#[tauri::command]
+async fn activate_license(product_key: String, device_name: Option<String>) -> Result<license::LicenseStatus, String> {
+    info!("Activating license with product key...");
+    match license::activate_with_product_key(&product_key, device_name.as_deref()).await {
+        Ok(status) => {
+            info!("License activated successfully");
+            Ok(status)
+        }
+        Err(e) => {
+            error!("License activation failed: {}", e);
+            Err(e)
+        }
+    }
+}
+
+/// Deactivate this device
+#[tauri::command]
+async fn deactivate_license() -> Result<(), String> {
+    info!("Deactivating license...");
+    match license::deactivate_device().await {
+        Ok(()) => {
+            info!("License deactivated successfully");
+            Ok(())
+        }
+        Err(e) => {
+            error!("License deactivation failed: {}", e);
+            Err(e)
+        }
+    }
+}
+
+/// Get the device's MAC address (for display in settings)
+#[tauri::command]
+fn get_device_id() -> Result<String, String> {
+    license::get_mac_address()
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -3521,7 +3578,12 @@ pub fn run() {
             get_log_directory,
             open_log_directory,
             check_app_update,
-            install_app_update
+            install_app_update,
+            // License commands
+            check_license_status,
+            activate_license,
+            deactivate_license,
+            get_device_id
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
