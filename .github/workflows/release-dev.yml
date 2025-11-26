@@ -55,7 +55,9 @@ jobs:
         shell: bash
         run: |
           # Use run number for consistent versioning across all platforms
-          VERSION="999.0.${{ github.run_number }}"
+          # Windows limits: major/minor <= 255, patch <= 65535
+          # Using 99.0.X ensures it's always higher than production (0.x.x) and within limits
+          VERSION="99.0.${{ github.run_number }}"
           echo "DEV_VERSION=$VERSION" >> $GITHUB_ENV
           echo "Setting dev version to: $VERSION"
 
@@ -153,7 +155,8 @@ jobs:
           mkdir -p ./release-assets
 
           # Use the same version as the build job (based on run number)
-          VERSION="999.0.${{ github.run_number }}"
+          # Must match the build step: 99.0.{run_number}
+          VERSION="99.0.${{ github.run_number }}"
           echo "VERSION=$VERSION" >> $GITHUB_ENV
           echo "Dev Version: $VERSION"
 
