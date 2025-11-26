@@ -34,6 +34,9 @@ regex = "1"
 lzma-rs = "0.3"
 sevenz-rust = "0.6"
 base64 = "0.22"
+aes-gcm = "0.10"
+scrypt = "0.11"
+chrono = { version = "0.4", features = ["serde"] }
 
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
 tauri-plugin-fs = "2"

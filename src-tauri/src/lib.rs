@@ -1,3 +1,6 @@
 pub use tauri;
 
-// Library functions can be added here as needed
+pub mod license;
+
+// Re-export license types for easier access
+pub use license::{LicenseData, LicenseStatus, PlanType};
