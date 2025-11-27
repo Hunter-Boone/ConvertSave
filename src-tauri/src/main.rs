@@ -1415,14 +1415,32 @@ async fn execute_conversion(
         "imagemagick" => {
             // ImageMagick 7 syntax: magick input.jpg [options] output.heic
             // Note: ImageMagick 7 doesn't use "convert" as a subcommand
-            command.arg(input_path);
             
-            // Check output format for special handling
+            // Check input and output formats
+            let input_ext = input_path
+                .extension()
+                .and_then(|ext| ext.to_str())
+                .unwrap_or("")
+                .to_lowercase();
             let output_ext = output_path
                 .extension()
                 .and_then(|ext| ext.to_str())
                 .unwrap_or("")
                 .to_lowercase();
+            
+            // Animation formats that can have multiple frames
+            let animation_formats = ["gif", "webp", "apng", "mng"];
+            
+            // If converting from an animation format to a static format, extract first frame only
+            // This prevents animated GIFs from creating artifacts when converted to static images
+            if animation_formats.contains(&input_ext.as_str()) && !animation_formats.contains(&output_ext.as_str()) {
+                // Use [0] syntax to select only the first frame
+                let input_with_frame = format!("{}[0]", input_path.display());
+                info!("Extracting first frame from animated {}: {}", input_ext.to_uppercase(), input_with_frame);
+                command.arg(&input_with_frame);
+            } else {
+                command.arg(input_path);
+            }
             
             // Check if we need to handle transparency -> opaque conversion
             // Formats that don't support alpha transparency (or only binary transparency like GIF)
@@ -1500,6 +1518,13 @@ async fn execute_conversion(
                 .unwrap_or("")
                 .to_lowercase();
             
+            // Check output format
+            let output_ext = output_path
+                .extension()
+                .and_then(|ext| ext.to_str())
+                .unwrap_or("")
+                .to_lowercase();
+            
             // HEIC/HEIF files need special tile reassembly handling
             if input_ext == "heic" || input_ext == "heif" {
                 return convert_heic_with_tiles(&tool_path, input_path, output_path);
@@ -1507,12 +1532,14 @@ async fn execute_conversion(
             
             command.arg("-i").arg(input_path);
             
-            // Check if we're converting to special formats
-            let output_ext = output_path
-                .extension()
-                .and_then(|ext| ext.to_str())
-                .unwrap_or("")
-                .to_lowercase();
+            // Animation formats that can have multiple frames
+            let animation_formats = ["gif", "webp", "apng", "mng"];
+            
+            // If converting from an animation format to a static format, extract first frame only
+            if animation_formats.contains(&input_ext.as_str()) && !animation_formats.contains(&output_ext.as_str()) {
+                info!("Extracting first frame from animated {}", input_ext.to_uppercase());
+                command.arg("-frames:v").arg("1");
+            }
             
             // Check if we need to handle transparency -> opaque conversion
             // Formats that don't support alpha transparency (or only binary transparency like GIF)
