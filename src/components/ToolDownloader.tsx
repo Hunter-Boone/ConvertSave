@@ -2,7 +2,8 @@ import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { open } from "@tauri-apps/plugin-dialog";
-import { Check, X, Loader, ChevronDown, ChevronUp } from "lucide-react";
+import { open as openUrl } from "@tauri-apps/plugin-shell";
+import { Check, X, Loader, ChevronDown, ChevronUp, Bug } from "lucide-react";
 import {
   LGPL_V3_LICENSE,
   GPL_V3_LICENSE,
@@ -348,6 +349,25 @@ export default function ToolDownloader({
       <div className="h-screen bg-light-bg flex flex-col overflow-hidden relative">
         {/* Top Right Buttons */}
         <div className="absolute top-6 right-6 z-50 flex items-center space-x-2">
+          {/* Report a Bug Button */}
+          <button
+            onClick={async () => {
+              try {
+                await openUrl("https://github.com/Hunter-Boone/ConvertSave-Support/issues");
+              } catch (err) {
+                setError(`Failed to open link: ${err}`);
+              }
+            }}
+            className="h-10 px-4 bg-white hover:bg-mint-accent rounded-lg flex items-center justify-center transition-colors shadow-lg border-2 border-dark-purple"
+            aria-label="Report a Bug"
+            title="Report a bug on GitHub"
+          >
+            <Bug className="w-5 h-5 text-dark-purple mr-2" />
+            <span className="text-sm font-bold text-dark-purple">
+              Report a Bug
+            </span>
+          </button>
+
           {/* View Logs Button */}
           <button
             onClick={async () => {
