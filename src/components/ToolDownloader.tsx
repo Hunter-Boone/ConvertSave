@@ -51,6 +51,7 @@ export default function ToolDownloader({
   const [imagemagickAdvancedOpen, setImagemagickAdvancedOpen] = useState(false);
   const [licenseAttributionOpen, setLicenseAttributionOpen] = useState(false);
   const [aboutOpen, setAboutOpen] = useState(false);
+  const [legalOpen, setLegalOpen] = useState(false);
   const [showLicensesModal, setShowLicensesModal] = useState(false);
   const [expandedLicense, setExpandedLicense] = useState<string | null>(null);
 
@@ -846,6 +847,56 @@ export default function ToolDownloader({
                       ConvertSave helps you quickly convert images locally on
                       your computer.
                     </p>
+                  </div>
+                )}
+              </div>
+
+              {/* Legal Section */}
+              <div className="space-y-2">
+                <button
+                  onClick={() => setLegalOpen(!legalOpen)}
+                  className="w-full p-4 bg-lighter-bg rounded-xl flex items-center justify-between hover:bg-muted-bg transition-colors"
+                >
+                  <span className="font-bold text-dark-purple">Legal</span>
+                  {legalOpen ? (
+                    <ChevronUp className="w-5 h-5 text-dark-purple" />
+                  ) : (
+                    <ChevronDown className="w-5 h-5 text-dark-purple" />
+                  )}
+                </button>
+
+                {legalOpen && (
+                  <div className="p-6 bg-lighter-bg rounded-xl space-y-4 text-sm text-secondary">
+                    <p>
+                      Please review our legal documents for information about
+                      how we handle your data and the terms of using ConvertSave.
+                    </p>
+                    <div className="flex flex-wrap gap-3">
+                      <button
+                        onClick={async () => {
+                          try {
+                            await openUrl("https://convertsave.com/privacy");
+                          } catch (err) {
+                            setError(`Failed to open link: ${err}`);
+                          }
+                        }}
+                        className="btn-chunky bg-white border-2 border-dark-purple text-dark-purple px-6 py-3 hover:bg-light-bg"
+                      >
+                        Privacy Policy
+                      </button>
+                      <button
+                        onClick={async () => {
+                          try {
+                            await openUrl("https://convertsave.com/terms");
+                          } catch (err) {
+                            setError(`Failed to open link: ${err}`);
+                          }
+                        }}
+                        className="btn-chunky bg-white border-2 border-dark-purple text-dark-purple px-6 py-3 hover:bg-light-bg"
+                      >
+                        Terms & Conditions
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>
