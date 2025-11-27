@@ -215,20 +215,146 @@ fn get_available_formats(input_extension: String) -> Vec<ConversionOption> {
     let input_extension = input_extension.to_lowercase();
     
     match input_extension.as_str() {
-        "mp4" | "mov" | "avi" | "mkv" => {
+        // Video formats
+        "mp4" | "mov" | "avi" | "mkv" | "webm" | "flv" | "wmv" | "m4v" | "mpg" | "mpeg" | "3gp" => {
+            // Video output formats
+            if input_extension != "mp4" {
+                options.push(ConversionOption {
+                    format: "mp4".to_string(),
+                    tool: "ffmpeg".to_string(),
+                    display_name: "MP4 Video".to_string(),
+                    color: "blue".to_string(),
+                });
+            }
+            if input_extension != "mov" {
+                options.push(ConversionOption {
+                    format: "mov".to_string(),
+                    tool: "ffmpeg".to_string(),
+                    display_name: "QuickTime Video".to_string(),
+                    color: "blue".to_string(),
+                });
+            }
+            if input_extension != "avi" {
+                options.push(ConversionOption {
+                    format: "avi".to_string(),
+                    tool: "ffmpeg".to_string(),
+                    display_name: "AVI Video".to_string(),
+                    color: "blue".to_string(),
+                });
+            }
+            if input_extension != "mkv" {
+                options.push(ConversionOption {
+                    format: "mkv".to_string(),
+                    tool: "ffmpeg".to_string(),
+                    display_name: "Matroska Video".to_string(),
+                    color: "blue".to_string(),
+                });
+            }
+            if input_extension != "webm" {
+                options.push(ConversionOption {
+                    format: "webm".to_string(),
+                    tool: "ffmpeg".to_string(),
+                    display_name: "WebM Video".to_string(),
+                    color: "green".to_string(),
+                });
+            }
+            // GIF from video
+            options.push(ConversionOption {
+                format: "gif".to_string(),
+                tool: "ffmpeg".to_string(),
+                display_name: "Animated GIF".to_string(),
+                color: "pink".to_string(),
+            });
+            // Audio extraction
             options.push(ConversionOption {
                 format: "mp3".to_string(),
                 tool: "ffmpeg".to_string(),
-                display_name: "Audio Only".to_string(),
+                display_name: "MP3 Audio".to_string(),
                 color: "green".to_string(),
             });
             options.push(ConversionOption {
-                format: "webm".to_string(),
+                format: "wav".to_string(),
                 tool: "ffmpeg".to_string(),
-                display_name: "WebM Video".to_string(),
-                color: "blue".to_string(),
+                display_name: "WAV Audio".to_string(),
+                color: "light-tan".to_string(),
             });
-        }        "docx" | "doc" | "odt" => {
+            options.push(ConversionOption {
+                format: "flac".to_string(),
+                tool: "ffmpeg".to_string(),
+                display_name: "FLAC Audio (Lossless)".to_string(),
+                color: "aquamarine".to_string(),
+            });
+            options.push(ConversionOption {
+                format: "ogg".to_string(),
+                tool: "ffmpeg".to_string(),
+                display_name: "OGG Audio".to_string(),
+                color: "orange".to_string(),
+            });
+            options.push(ConversionOption {
+                format: "m4a".to_string(),
+                tool: "ffmpeg".to_string(),
+                display_name: "M4A Audio".to_string(),
+                color: "light-purple".to_string(),
+            });
+            options.push(ConversionOption {
+                format: "aac".to_string(),
+                tool: "ffmpeg".to_string(),
+                display_name: "AAC Audio".to_string(),
+                color: "yellow".to_string(),
+            });
+        }
+        // Audio formats
+        "mp3" | "wav" | "flac" | "ogg" | "m4a" | "wma" | "aac" => {
+            if input_extension != "mp3" {
+                options.push(ConversionOption {
+                    format: "mp3".to_string(),
+                    tool: "ffmpeg".to_string(),
+                    display_name: "MP3 Audio".to_string(),
+                    color: "green".to_string(),
+                });
+            }
+            if input_extension != "wav" {
+                options.push(ConversionOption {
+                    format: "wav".to_string(),
+                    tool: "ffmpeg".to_string(),
+                    display_name: "WAV Audio".to_string(),
+                    color: "light-tan".to_string(),
+                });
+            }
+            if input_extension != "flac" {
+                options.push(ConversionOption {
+                    format: "flac".to_string(),
+                    tool: "ffmpeg".to_string(),
+                    display_name: "FLAC Audio (Lossless)".to_string(),
+                    color: "aquamarine".to_string(),
+                });
+            }
+            if input_extension != "ogg" {
+                options.push(ConversionOption {
+                    format: "ogg".to_string(),
+                    tool: "ffmpeg".to_string(),
+                    display_name: "OGG Audio".to_string(),
+                    color: "orange".to_string(),
+                });
+            }
+            if input_extension != "m4a" {
+                options.push(ConversionOption {
+                    format: "m4a".to_string(),
+                    tool: "ffmpeg".to_string(),
+                    display_name: "M4A Audio".to_string(),
+                    color: "light-purple".to_string(),
+                });
+            }
+            if input_extension != "aac" {
+                options.push(ConversionOption {
+                    format: "aac".to_string(),
+                    tool: "ffmpeg".to_string(),
+                    display_name: "AAC Audio".to_string(),
+                    color: "yellow".to_string(),
+                });
+            }
+        }
+        "docx" | "doc" | "odt" => {
             options.push(ConversionOption {
                 format: "pdf".to_string(),
                 tool: "libreoffice".to_string(),
@@ -331,7 +457,24 @@ fn get_available_formats(input_extension: String) -> Vec<ConversionOption> {
                 color: "pink".to_string(),
             });
         }
-        "png" | "jpg" | "jpeg" | "bmp" | "tiff" | "webp" | "gif" | "heic" | "heif" | "avif" | "tga" | "ppm" | "pgm" | "pbm" | "pam" | "xbm" | "xpm" | "dds" | "dpx" | "exr" | "hdr" | "ico" | "j2k" | "jp2" | "pcx" | "pfm" | "sgi" | "sun" | "xwd" => {
+        // Standard image formats + Modern + Professional + Legacy + RAW + Animation
+        "png" | "jpg" | "jpeg" | "bmp" | "tiff" | "tif" | "webp" | "gif" | 
+        // Modern formats
+        "heic" | "heif" | "avif" | "jxl" |
+        // Professional/High-end
+        "tga" | "ppm" | "pgm" | "pbm" | "pam" | "xbm" | "xpm" | "dds" | "dpx" | "exr" | "hdr" | "ico" | "j2k" | "jp2" | "pcx" | "pfm" | "sgi" | "sun" | "xwd" |
+        // Adobe/Photoshop
+        "psd" | "psb" |
+        // Vector (rasterized)
+        "svg" | "svgz" |
+        // Animation
+        "apng" |
+        // GIMP
+        "xcf" |
+        // Windows
+        "cur" | "emf" | "wmf" |
+        // Camera RAW formats
+        "arw" | "cr2" | "cr3" | "crw" | "dng" | "nef" | "nrw" | "orf" | "raf" | "raw" | "rw2" | "rwl" | "srw" => {
             // Standard formats
             // JPG <-> JPEG simple rename conversions
             if input_extension == "jpg" {
@@ -427,6 +570,14 @@ fn get_available_formats(input_extension: String) -> Vec<ConversionOption> {
                     format: "avif".to_string(),
                     tool: "ffmpeg".to_string(),
                     display_name: "AVIF (AV1 Image)".to_string(),
+                    color: "aquamarine".to_string(),
+                });
+            }
+            if input_extension != "jxl" {
+                options.push(ConversionOption {
+                    format: "jxl".to_string(),
+                    tool: "imagemagick".to_string(),
+                    display_name: "JPEG XL".to_string(),
                     color: "aquamarine".to_string(),
                 });
             }
@@ -567,6 +718,36 @@ fn get_available_formats(input_extension: String) -> Vec<ConversionOption> {
                     format: "dds".to_string(),
                     tool: "ffmpeg".to_string(),
                     display_name: "DirectDraw Surface".to_string(),
+                    color: "blue".to_string(),
+                });
+            }
+            
+            // Adobe/Photoshop format
+            if input_extension != "psd" && input_extension != "psb" {
+                options.push(ConversionOption {
+                    format: "psd".to_string(),
+                    tool: "imagemagick".to_string(),
+                    display_name: "Photoshop Document".to_string(),
+                    color: "blue".to_string(),
+                });
+            }
+            
+            // Animation format
+            if input_extension != "apng" {
+                options.push(ConversionOption {
+                    format: "apng".to_string(),
+                    tool: "imagemagick".to_string(),
+                    display_name: "Animated PNG".to_string(),
+                    color: "orange".to_string(),
+                });
+            }
+            
+            // Windows cursor format
+            if input_extension != "cur" {
+                options.push(ConversionOption {
+                    format: "cur".to_string(),
+                    tool: "imagemagick".to_string(),
+                    display_name: "Windows Cursor".to_string(),
                     color: "blue".to_string(),
                 });
             }
@@ -1657,15 +1838,16 @@ async fn execute_conversion(
                 }
                 
                 // For video/multi-frame input to single image output, specify one frame
+                // NOTE: gif is excluded because video->gif should create animated GIF
                 let video_formats = ["mp4", "mov", "avi", "mkv", "webm", "flv", "wmv", "m4v", "mpg", "mpeg", "3gp", "ogv"];
-                let image_formats = ["jpg", "jpeg", "png", "webp", "bmp", "gif", "tiff", "tif", "ico"];
+                let static_image_formats = ["jpg", "jpeg", "png", "webp", "bmp", "tiff", "tif", "ico"];
                 
-                if video_formats.contains(&input_ext.as_str()) && image_formats.contains(&output_ext.as_str()) {
+                if video_formats.contains(&input_ext.as_str()) && static_image_formats.contains(&output_ext.as_str()) {
                     command.arg("-frames:v").arg("1");
                 }
                 
-                // For single image output, use -update flag to write one file (not a sequence)
-                if image_formats.contains(&output_ext.as_str()) {
+                // For single image output (not animated GIF), use -update flag to write one file (not a sequence)
+                if static_image_formats.contains(&output_ext.as_str()) {
                     command.arg("-update").arg("1");
                 }
                 

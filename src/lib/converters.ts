@@ -29,13 +29,25 @@ export const conversionTools: ConversionTool[] = [
       // Modern formats
       "heic", "heif", "avif", "jxl",
       // Professional/High-end formats
-      "tga", "exr", "hdr", "dpx", "psd",
+      "tga", "exr", "hdr", "dpx", "psd", "psb",
       // Legacy/Specialized formats
-      "pcx", "ico", "sgi",
+      "pcx", "ico", "sgi", "sun", "pfm", "ppm", "pgm", "pbm", "pam",
+      // X Window System formats
+      "xbm", "xpm", "xwd",
+      // Gaming formats
+      "dds",
       // Vector formats (rasterized on input)
-      "svg",
+      "svg", "svgz",
+      // Animation formats
+      "apng",
+      // GIMP format
+      "xcf",
+      // Windows formats
+      "cur", "emf", "wmf",
       // Digital camera RAW formats
-      "raw", "arw", "cr2", "cr3", "dng", "nef", "orf", "raf", "rw2",
+      "raw", "arw", "cr2", "cr3", "crw", "dng", "nef", "nrw", "orf", "raf", "rw2", "rwl", "srw",
+      // JPEG 2000
+      "j2k", "jp2",
     ],
     supportedOutputs: [
       // Standard/Common formats
@@ -46,8 +58,18 @@ export const conversionTools: ConversionTool[] = [
       "pdf",
       // Professional formats
       "tga", "exr", "hdr", "psd",
+      // Animation formats
+      "apng",
       // Legacy formats
-      "ico", "pcx",
+      "ico", "pcx", "cur",
+      // Raw/Uncompressed
+      "ppm", "pgm", "pbm", "pam",
+      // X Window System
+      "xbm", "xpm", "xwd",
+      // Gaming
+      "dds",
+      // JPEG 2000
+      "j2k", "jp2",
     ],
   },
 ];
