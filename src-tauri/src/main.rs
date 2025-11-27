@@ -570,6 +570,14 @@ fn get_available_formats(input_extension: String) -> Vec<ConversionOption> {
                     color: "blue".to_string(),
                 });
             }
+            
+            // Document format - PDF output from images
+            options.push(ConversionOption {
+                format: "pdf".to_string(),
+                tool: "imagemagick".to_string(),
+                display_name: "PDF Document".to_string(),
+                color: "pink".to_string(),
+            });
         }
         _ => {
             info!("No conversion options found for extension: '{}'", input_extension);
@@ -1492,9 +1500,14 @@ async fn execute_conversion(
                 "tiff" | "tif" | "exr" | "hdr" | "dpx" => {
                     command.arg("-quality").arg("100");
                 }
-                // Vector/document formats
-                "pdf" | "svg" | "svgz" => {
-                    command.arg("-density").arg("300"); // 300 DPI for PDF/vector
+                // PDF output from images - use JPEG compression for reasonable file size
+                "pdf" => {
+                    command.arg("-compress").arg("jpeg"); // Compress images appropriately, preserves transparency
+                    command.arg("-density").arg("300");   // Display at correct zoom level
+                }
+                // Vector formats
+                "svg" | "svgz" => {
+                    command.arg("-density").arg("300"); // 300 DPI for vector
                 }
                 // Everything else uses ImageMagick defaults
                 _ => {}

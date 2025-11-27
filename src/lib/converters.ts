@@ -23,8 +23,32 @@ export const conversionTools: ConversionTool[] = [
   {
     name: "ImageMagick",
     command: "imagemagick",
-    supportedInputs: ["jpg", "jpeg", "png", "gif", "bmp", "tiff", "tif", "webp", "svg", "ico", "heic", "raw"],
-    supportedOutputs: ["jpg", "jpeg", "png", "gif", "bmp", "tiff", "webp", "pdf", "ico"],
+    supportedInputs: [
+      // Standard/Common formats
+      "jpg", "jpeg", "png", "gif", "bmp", "tiff", "tif", "webp",
+      // Modern formats
+      "heic", "heif", "avif", "jxl",
+      // Professional/High-end formats
+      "tga", "exr", "hdr", "dpx", "psd",
+      // Legacy/Specialized formats
+      "pcx", "ico", "sgi",
+      // Vector formats (rasterized on input)
+      "svg",
+      // Digital camera RAW formats
+      "raw", "arw", "cr2", "cr3", "dng", "nef", "orf", "raf", "rw2",
+    ],
+    supportedOutputs: [
+      // Standard/Common formats
+      "jpg", "jpeg", "png", "gif", "bmp", "tiff", "tif", "webp",
+      // Modern formats
+      "heic", "heif", "avif", "jxl",
+      // Document format
+      "pdf",
+      // Professional formats
+      "tga", "exr", "hdr", "psd",
+      // Legacy formats
+      "ico", "pcx",
+    ],
   },
 ];
 
