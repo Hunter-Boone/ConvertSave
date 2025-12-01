@@ -9,6 +9,10 @@ edition = "2021"
 name = "convertsave"
 path = "src/main.rs"
 
+[lib]
+name = "convertsave_lib"
+path = "src/lib.rs"
+
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 

@@ -10,7 +10,12 @@
     "tauri": "tauri",
     "tauri:dev": "./scripts/tauri-dev.sh",
     "tauri:dev:clean": "./scripts/tauri-dev-clean.sh",
-    "version:update": "pwsh ./scripts/update-version.ps1"
+    "version:update": "pwsh ./scripts/update-version.ps1",
+    "test": "cd src-tauri && cargo test",
+    "test:unit": "cd src-tauri && cargo test --lib",
+    "test:integration": "cd src-tauri && cargo test --test integration_tests",
+    "test:fixtures": "pwsh ./src-tauri/tests/generate_fixtures.ps1",
+    "test:fixtures:unix": "bash ./src-tauri/tests/generate_fixtures.sh"
   },
   "dependencies": {
     "react": "^18.3.1",
