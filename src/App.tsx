@@ -473,6 +473,24 @@ function App() {
           return a.localeCompare(b);
         });
 
+        // Check if we have multiple image files - if so, add PDF (Multipage) option
+        const imageExtensions = [
+          "jpg", "jpeg", "png", "gif", "bmp", "webp", "svg", "ico", "tiff", "tif",
+          "heic", "heif", "avif", "jxl", "tga", "exr", "hdr", "psd", "psb"
+        ];
+        const imageFiles = selectedFiles.filter((f) =>
+          imageExtensions.includes(f.extension.toLowerCase())
+        );
+        
+        // Add pdf-multipage option if there are multiple image files and PDF is available
+        if (imageFiles.length > 1 && sortedFormats.includes("pdf")) {
+          // Find position after regular PDF and insert pdf-multipage
+          const pdfIndex = sortedFormats.indexOf("pdf");
+          if (pdfIndex !== -1) {
+            sortedFormats.splice(pdfIndex + 1, 0, "pdf-multipage");
+          }
+        }
+
         setAvailableFormats(sortedFormats);
 
         // Update selected format if current one is not available or empty
@@ -550,6 +568,30 @@ function App() {
     setConversionResult(null);
 
     try {
+      // Handle multipage PDF conversion specially
+      if (selectedFormat === "pdf-multipage") {
+        try {
+          const inputPaths = selectedFiles.map((f) => f.path);
+          await invoke<string>("convert_images_to_multipage_pdf", {
+            inputPaths,
+            outputDirectory: outputDirectory || undefined,
+          });
+          setConversionResult({
+            success: true,
+            message: `Successfully created multipage PDF from ${selectedFiles.length} images!`,
+          });
+        } catch (error) {
+          console.error("Failed to create multipage PDF:", error);
+          setConversionResult({
+            success: false,
+            message: `Failed to create multipage PDF: ${error}`,
+          });
+        }
+        setConversionProgress(100);
+        setIsConverting(false);
+        return;
+      }
+
       let successCount = 0;
       let failureCount = 0;
       let firstErrorMessage = "";

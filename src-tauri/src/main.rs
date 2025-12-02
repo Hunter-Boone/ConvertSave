@@ -867,6 +867,84 @@ async fn convert_file(
     }
 }
 
+/// Convert multiple images into a single multipage PDF
+#[tauri::command]
+async fn convert_images_to_multipage_pdf(
+    input_paths: Vec<String>,
+    output_directory: Option<String>,
+) -> Result<String, String> {
+    info!("Starting multipage PDF conversion with {} images", input_paths.len());
+    
+    if input_paths.is_empty() {
+        return Err("No input files provided".to_string());
+    }
+    
+    // Convert string paths to PathBuf
+    let input_paths: Vec<PathBuf> = input_paths.iter().map(PathBuf::from).collect();
+    
+    // Verify all input files exist
+    for path in &input_paths {
+        if !path.exists() {
+            return Err(format!("Input file not found: {}", path.display()));
+        }
+    }
+    
+    // Determine output directory - use the directory of the first file if not specified
+    let output_dir = if let Some(dir) = output_directory {
+        PathBuf::from(dir)
+    } else {
+        input_paths[0]
+            .parent()
+            .ok_or("Could not determine output directory")?
+            .to_path_buf()
+    };
+    
+    // Generate output filename based on first file name
+    let first_file_stem = input_paths[0]
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or("combined");
+    
+    // Get a unique output path
+    let output_path = get_unique_output_path(&output_dir, &format!("{}_multipage", first_file_stem), "pdf");
+    
+    // Get ImageMagick path
+    let tool_path = get_tool_path("imagemagick")
+        .map_err(|e| format!("ImageMagick is required for multipage PDF creation: {}", e))?;
+    
+    // Build ImageMagick command: magick input1.jpg input2.png ... output.pdf
+    let mut command = create_command(&tool_path);
+    
+    // Add all input files
+    for input_path in &input_paths {
+        command.arg(input_path);
+    }
+    
+    // Add PDF-specific options for good quality output
+    command.arg("-compress").arg("jpeg");  // Use JPEG compression for images
+    command.arg("-quality").arg("85");     // Good quality/size balance
+    command.arg("-density").arg("300");    // 300 DPI for print quality
+    
+    // Add output path
+    command.arg(&output_path);
+    
+    info!("Executing ImageMagick multipage PDF command...");
+    
+    let output = command.output()
+        .map_err(|e| format!("Failed to execute ImageMagick: {}", e))?;
+    
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        error!("ImageMagick multipage PDF failed - stderr: {}", stderr);
+        error!("ImageMagick multipage PDF failed - stdout: {}", stdout);
+        return Err(format!("Failed to create multipage PDF: {}", stderr));
+    }
+    
+    info!("Multipage PDF created successfully: {}", output_path.display());
+    Ok(output_path.to_string_lossy().to_string())
+}
+
 #[tauri::command]
 async fn get_file_info(path: String) -> Result<serde_json::Value, String> {
     let path = PathBuf::from(&path);
@@ -3823,6 +3901,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             get_available_formats,
             convert_file,
+            convert_images_to_multipage_pdf,
             get_file_info,
             get_thumbnail,
             test_directories,

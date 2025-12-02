@@ -1,6 +1,11 @@
 import { useState, useRef, useEffect } from "react";
 import { ChevronDown } from "lucide-react";
 
+// Special format display configurations
+const formatDisplayConfig: Record<string, { label: string; subtitle?: string }> = {
+  "pdf-multipage": { label: "PDF", subtitle: "(Multipage)" },
+};
+
 interface CustomSelectProps {
   value: string;
   onChange: (value: string) => void;
@@ -41,13 +46,24 @@ export function CustomSelect({
 
   // Calculate minimum width based on longest option
   const longestOption = options.reduce((longest, current) => {
-    return current.length > longest.length ? current : longest;
+    const config = formatDisplayConfig[current];
+    const displayLength = config ? config.label.length : current.length;
+    return displayLength > longest.length ? current : longest;
   }, placeholder);
 
   // Approximate width: ~7px per character + padding (32px) + icon space (36px)
-  const minWidth = Math.max(longestOption.length * 7 + 68, 110);
+  const minWidth = Math.max(longestOption.length * 7 + 68, 140);
 
-  const displayValue = value ? value.toUpperCase() : placeholder;
+  // Get display text for the selected value
+  const getDisplayText = (format: string) => {
+    const config = formatDisplayConfig[format];
+    if (config) {
+      return config;
+    }
+    return { label: format.toUpperCase() };
+  };
+
+  const displayConfig = value ? getDisplayText(value) : { label: placeholder };
 
   return (
     <div
@@ -65,7 +81,12 @@ export function CustomSelect({
             : "bg-white border-2 border-dark-purple text-dark-purple cursor-pointer hover:bg-light-bg"
         }`}
       >
-        <span>{displayValue}</span>
+        <span className="flex flex-col items-center leading-tight">
+          <span>{displayConfig.label}</span>
+          {displayConfig.subtitle && (
+            <span className="text-xs text-secondary">{displayConfig.subtitle}</span>
+          )}
+        </span>
         <ChevronDown
           className={`absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none transition-transform ${
             isOpen ? "rotate-180" : ""
@@ -76,20 +97,28 @@ export function CustomSelect({
       {isOpen && !disabled && (
         <div className="absolute z-50 mt-2 w-full bg-white border-2 border-dark-purple rounded-xl shadow-chunky-hover max-h-80 overflow-hidden">
           <div className="overflow-y-auto max-h-80 p-2">
-            {options.map((option, index) => (
-              <button
-                key={option}
-                type="button"
-                onClick={() => handleSelect(option)}
-                className={`w-full px-4 py-2 text-center font-bold hover:bg-light-bg transition-colors whitespace-nowrap ${
-                  index === 0 ? "rounded-t-lg" : ""
-                } ${index === options.length - 1 ? "rounded-b-lg" : ""} ${
-                  value === option ? "text-dark-purple" : "text-secondary"
-                }`}
-              >
-                {option.toUpperCase()}
-              </button>
-            ))}
+            {options.map((option, index) => {
+              const optionConfig = getDisplayText(option);
+              return (
+                <button
+                  key={option}
+                  type="button"
+                  onClick={() => handleSelect(option)}
+                  className={`w-full px-4 py-2 text-center font-bold hover:bg-light-bg transition-colors whitespace-nowrap ${
+                    index === 0 ? "rounded-t-lg" : ""
+                  } ${index === options.length - 1 ? "rounded-b-lg" : ""} ${
+                    value === option ? "text-dark-purple" : "text-secondary"
+                  }`}
+                >
+                  <span className="flex flex-col items-center leading-tight">
+                    <span>{optionConfig.label}</span>
+                    {optionConfig.subtitle && (
+                      <span className="text-xs font-normal">{optionConfig.subtitle}</span>
+                    )}
+                  </span>
+                </button>
+              );
+            })}
           </div>
         </div>
       )}
