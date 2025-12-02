@@ -17,6 +17,7 @@ interface LicenseStatus {
   inGracePeriod: boolean;
   error: string | null;
   requiresActivation: boolean;
+  productKey: string | null;
 }
 
 // FileItem component with thumbnail support
@@ -195,6 +196,7 @@ function App() {
           inGracePeriod: false,
           error: "Failed to check license status",
           requiresActivation: true,
+          productKey: null,
         });
       } finally {
         setLicenseChecked(true);
@@ -958,7 +960,17 @@ function App() {
 
   // Show tool downloader if tools aren't ready OR if user manually opens tool manager
   if (toolsReady === false || showToolManager) {
-    return <ToolDownloader onAllToolsReady={handleToolsReady} />;
+    return (
+      <ToolDownloader
+        onAllToolsReady={handleToolsReady}
+        productKey={licenseStatus?.productKey ?? null}
+        onProductKeyChanged={(newKey) => {
+          if (licenseStatus) {
+            setLicenseStatus({ ...licenseStatus, productKey: newKey });
+          }
+        }}
+      />
+    );
   }
 
   // Show loading state while checking tools

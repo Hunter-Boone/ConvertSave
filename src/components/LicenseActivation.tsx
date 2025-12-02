@@ -9,6 +9,7 @@ interface LicenseStatus {
   inGracePeriod: boolean;
   error: string | null;
   requiresActivation: boolean;
+  productKey: string | null;
 }
 
 interface LicenseActivationProps {

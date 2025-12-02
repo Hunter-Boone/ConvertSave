@@ -71,6 +71,7 @@ pub struct LicenseStatus {
     pub in_grace_period: bool,
     pub error: Option<String>,
     pub requires_activation: bool,
+    pub product_key: Option<String>,
 }
 
 impl Default for LicenseStatus {
@@ -83,6 +84,7 @@ impl Default for LicenseStatus {
             in_grace_period: false,
             error: None,
             requires_activation: true,
+            product_key: None,
         }
     }
 }
@@ -287,6 +289,8 @@ fn validate_license_data(license: &LicenseData, mac_address: &str) -> LicenseSta
         };
     }
 
+    let product_key = Some(license.product_key.clone());
+
     // Lifetime licenses are always valid
     if license.plan_type == PlanType::Lifetime {
         return LicenseStatus {
@@ -297,6 +301,7 @@ fn validate_license_data(license: &LicenseData, mac_address: &str) -> LicenseSta
             in_grace_period: false,
             error: None,
             requires_activation: false,
+            product_key,
         };
     }
 
@@ -316,6 +321,7 @@ fn validate_license_data(license: &LicenseData, mac_address: &str) -> LicenseSta
                     in_grace_period: false,
                     error: Some("Subscription has expired".to_string()),
                     requires_activation: false,
+                    product_key,
                 };
             } else if days_remaining < 0 {
                 // In grace period
@@ -327,6 +333,7 @@ fn validate_license_data(license: &LicenseData, mac_address: &str) -> LicenseSta
                     in_grace_period: true,
                     error: None,
                     requires_activation: false,
+                    product_key,
                 };
             } else {
                 // Valid subscription
@@ -338,6 +345,7 @@ fn validate_license_data(license: &LicenseData, mac_address: &str) -> LicenseSta
                     in_grace_period: false,
                     error: None,
                     requires_activation: false,
+                    product_key,
                 };
             }
         }
@@ -354,6 +362,7 @@ fn validate_license_data(license: &LicenseData, mac_address: &str) -> LicenseSta
         in_grace_period: false,
         error: None,
         requires_activation: false,
+        product_key,
     }
 }
 
@@ -581,4 +590,74 @@ pub async fn deactivate_device() -> Result<(), String> {
             .unwrap_or("Deactivation failed")
             .to_string())
     }
+}
+
+/// Get the current product key from the local license file
+pub fn get_current_product_key() -> Result<String, String> {
+    let encrypted_license = load_license()?;
+    let license_data = decrypt_license(&encrypted_license)?;
+    Ok(license_data.product_key)
+}
+
+/// Response from /api/license/change
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+#[allow(dead_code)]
+struct ChangeResponse {
+    success: bool,
+    license: Option<String>,
+    plan_type: Option<String>,
+    subscription_end_date: Option<String>,
+    error: Option<String>,
+}
+
+/// Change the product key for this device
+/// This deactivates the old license and activates the new one
+pub async fn change_product_key(
+    new_product_key: &str,
+    device_name: Option<&str>,
+) -> Result<LicenseStatus, String> {
+    let mac_address = get_mac_address()?;
+    let client = reqwest::Client::new();
+
+    let mut body = serde_json::json!({
+        "newProductKey": new_product_key,
+        "macAddress": mac_address
+    });
+
+    if let Some(name) = device_name {
+        body["deviceName"] = serde_json::Value::String(name.to_string());
+    }
+
+    let response = client
+        .post(format!("{}/change", API_BASE_URL))
+        .json(&body)
+        .send()
+        .await
+        .map_err(|e| format!("Network error: {}", e))?;
+
+    let status_code = response.status();
+    let data: ChangeResponse = response
+        .json()
+        .await
+        .map_err(|e| format!("Parse error: {}", e))?;
+
+    if data.success {
+        if let Some(license) = data.license {
+            // Save the new license locally
+            save_license(&license)?;
+
+            // Validate and return status
+            let license_data = decrypt_license(&license)?;
+            return Ok(validate_license_data(&license_data, &mac_address));
+        }
+    }
+
+    Err(data.error.unwrap_or_else(|| {
+        if status_code.is_client_error() {
+            "Invalid product key".to_string()
+        } else {
+            "Failed to change product key".to_string()
+        }
+    }))
 }

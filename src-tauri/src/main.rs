@@ -3766,6 +3766,28 @@ fn get_device_id() -> Result<String, String> {
     license::get_mac_address()
 }
 
+/// Get the current product key from local license
+#[tauri::command]
+fn get_current_product_key() -> Result<String, String> {
+    license::get_current_product_key()
+}
+
+/// Change the product key for this device
+#[tauri::command]
+async fn change_product_key(new_product_key: String, device_name: Option<String>) -> Result<license::LicenseStatus, String> {
+    info!("Changing product key...");
+    match license::change_product_key(&new_product_key, device_name.as_deref()).await {
+        Ok(status) => {
+            info!("Product key changed successfully");
+            Ok(status)
+        }
+        Err(e) => {
+            error!("Product key change failed: {}", e);
+            Err(e)
+        }
+    }
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -3821,7 +3843,9 @@ pub fn run() {
             check_license_status,
             activate_license,
             deactivate_license,
-            get_device_id
+            get_device_id,
+            get_current_product_key,
+            change_product_key
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -3,13 +3,24 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { open } from "@tauri-apps/plugin-dialog";
 import { open as openUrl } from "@tauri-apps/plugin-shell";
-import { Check, X, Loader, ChevronDown, ChevronUp, Bug } from "lucide-react";
+import { Check, X, Loader, ChevronDown, ChevronUp, Bug, Key } from "lucide-react";
 import {
   LGPL_V3_LICENSE,
   GPL_V3_LICENSE,
   IMAGEMAGICK_LICENSE,
   LUCIDE_LICENSE,
 } from "../lib/licenses";
+
+interface LicenseStatus {
+  isValid: boolean;
+  isActivated: boolean;
+  planType: "monthly" | "yearly" | "lifetime" | null;
+  daysRemaining: number | null;
+  inGracePeriod: boolean;
+  error: string | null;
+  requiresActivation: boolean;
+  productKey: string | null;
+}
 
 interface ToolStatus {
   ffmpeg: {
@@ -34,10 +45,14 @@ interface DownloadProgress {
 
 interface ToolDownloaderProps {
   onAllToolsReady: () => void;
+  productKey: string | null;
+  onProductKeyChanged: (newKey: string) => void;
 }
 
 export default function ToolDownloader({
   onAllToolsReady,
+  productKey,
+  onProductKeyChanged,
 }: ToolDownloaderProps) {
   const [toolStatus, setToolStatus] = useState<ToolStatus | null>(null);
   const [downloadingTools, setDownloadingTools] = useState<Set<string>>(
@@ -54,6 +69,14 @@ export default function ToolDownloader({
   const [legalOpen, setLegalOpen] = useState(false);
   const [showLicensesModal, setShowLicensesModal] = useState(false);
   const [expandedLicense, setExpandedLicense] = useState<string | null>(null);
+  
+  // Product Key state
+  const [productKeyOpen, setProductKeyOpen] = useState(false);
+  const [showProductKeyModal, setShowProductKeyModal] = useState(false);
+  const [newProductKey, setNewProductKey] = useState("");
+  const [isChangingKey, setIsChangingKey] = useState(false);
+  const [productKeyError, setProductKeyError] = useState<string | null>(null);
+  const [productKeySuccess, setProductKeySuccess] = useState<string | null>(null);
 
   useEffect(() => {
     checkToolsStatus();
@@ -200,6 +223,72 @@ export default function ToolDownloader({
     }
   };
 
+  // Format product key as user types (XXXXX-XXXXX-XXXXX-XXXXX)
+  const handleNewKeyChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    let value = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "");
+
+    // Add dashes every 5 characters
+    const parts = [];
+    for (let i = 0; i < value.length && i < 20; i += 5) {
+      parts.push(value.slice(i, i + 5));
+    }
+    setNewProductKey(parts.join("-"));
+    setProductKeyError(null);
+  };
+
+  const handleChangeProductKey = async () => {
+    if (!newProductKey || newProductKey.replace(/-/g, "").length !== 20) {
+      setProductKeyError("Please enter a valid product key");
+      return;
+    }
+
+    setIsChangingKey(true);
+    setProductKeyError(null);
+    setProductKeySuccess(null);
+
+    try {
+      // Get device name
+      let deviceName = "Unknown Device";
+      try {
+        deviceName = await invoke<string>("get_device_id");
+        deviceName = deviceName.slice(0, 20);
+      } catch {
+        // Use default
+      }
+
+      const status = await invoke<LicenseStatus>("change_product_key", {
+        newProductKey: newProductKey,
+        deviceName: deviceName,
+      });
+
+      if (status.isValid) {
+        onProductKeyChanged(newProductKey);
+        setProductKeySuccess("Product key changed successfully!");
+        setNewProductKey("");
+        
+        // Close modal after a short delay
+        setTimeout(() => {
+          setShowProductKeyModal(false);
+          setProductKeySuccess(null);
+        }, 2000);
+      } else {
+        setProductKeyError(status.error || "Failed to change product key");
+      }
+    } catch (err: any) {
+      console.error("Change product key error:", err);
+      setProductKeyError(err.toString() || "Failed to change product key");
+    } finally {
+      setIsChangingKey(false);
+    }
+  };
+
+  const openProductKeyModal = () => {
+    setNewProductKey("");
+    setProductKeyError(null);
+    setProductKeySuccess(null);
+    setShowProductKeyModal(true);
+  };
+
   if (!toolStatus) {
     return (
       <div className="flex items-center justify-center h-screen bg-light-bg">
@@ -231,6 +320,100 @@ export default function ToolDownloader({
 
   return (
     <>
+      {/* Product Key Modal */}
+      {showProductKeyModal && (
+        <div
+          className="fixed inset-0 z-[200] flex items-center justify-center bg-dark-purple bg-opacity-50"
+          onClick={() => setShowProductKeyModal(false)}
+        >
+          <div
+            className="bg-white rounded-xl shadow-2xl max-w-md w-full mx-4 overflow-hidden flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div className="flex items-center justify-between p-6 border-b border-lighter-bg">
+              <h2 className="text-2xl font-bold text-dark-purple">Product Key</h2>
+              <button
+                onClick={() => setShowProductKeyModal(false)}
+                className="w-8 h-8 bg-light-grey hover:bg-pink rounded-lg flex items-center justify-center transition-colors"
+                aria-label="Close"
+              >
+                <X className="w-5 h-5 text-dark-purple" />
+              </button>
+            </div>
+
+            {/* Modal Content */}
+            <div className="p-6 space-y-6">
+              {/* Current Product Key */}
+              {productKey && (
+                <div className="space-y-2">
+                  <label className="block text-sm font-bold text-dark-purple">
+                    Current Product Key
+                  </label>
+                  <div className="w-full px-4 py-3 text-lg font-mono tracking-wider border-2 border-lighter-bg rounded-xl bg-light-bg text-center text-secondary select-all">
+                    {productKey}
+                  </div>
+                </div>
+              )}
+
+              {/* New Product Key Input */}
+              <div className="space-y-2">
+                <label className="block text-sm font-bold text-dark-purple">
+                  {productKey ? "New Product Key" : "Enter Product Key"}
+                </label>
+                <input
+                  type="text"
+                  value={newProductKey}
+                  onChange={handleNewKeyChange}
+                  placeholder="XXXXX-XXXXX-XXXXX-XXXXX"
+                  className="w-full px-4 py-3 text-lg font-mono tracking-wider border-2 border-dark-purple rounded-xl focus:outline-none focus:ring-2 focus:ring-mint-accent text-center uppercase"
+                  disabled={isChangingKey}
+                  maxLength={23}
+                />
+                <p className="text-xs text-secondary text-center">
+                  Enter a new product key to switch to a different license
+                </p>
+              </div>
+
+              {/* Error Message */}
+              {productKeyError && (
+                <div className="bg-pink-accent text-dark-purple px-4 py-3 rounded-xl text-sm font-medium">
+                  {productKeyError}
+                </div>
+              )}
+
+              {/* Success Message */}
+              {productKeySuccess && (
+                <div className="bg-mint-accent text-dark-purple px-4 py-3 rounded-xl text-sm font-medium flex items-center space-x-2">
+                  <Check className="w-4 h-4" />
+                  <span>{productKeySuccess}</span>
+                </div>
+              )}
+
+              {/* Change Button */}
+              <button
+                onClick={handleChangeProductKey}
+                disabled={isChangingKey || newProductKey.replace(/-/g, "").length !== 20}
+                className={`w-full py-3 rounded-xl font-bold text-lg border-2 border-dark-purple transition-all ${
+                  isChangingKey || newProductKey.replace(/-/g, "").length !== 20
+                    ? "bg-lighter-bg text-secondary cursor-not-allowed"
+                    : "bg-mint-accent text-dark-purple hover:bg-opacity-80"
+                }`}
+              >
+                {isChangingKey ? (
+                  <span className="flex items-center justify-center gap-2">
+                    <Loader className="w-5 h-5 animate-spin" />
+                    Changing...
+                  </span>
+                ) : (
+                  "Change Product Key"
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Licenses Modal */}
       {showLicensesModal && (
         <div
@@ -895,6 +1078,47 @@ export default function ToolDownloader({
                         className="btn-chunky bg-white border-2 border-dark-purple text-dark-purple px-6 py-3 hover:bg-light-bg"
                       >
                         Terms & Conditions
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Product Key Section */}
+              <div className="space-y-2">
+                <button
+                  onClick={() => setProductKeyOpen(!productKeyOpen)}
+                  className="w-full p-4 bg-lighter-bg rounded-xl flex items-center justify-between hover:bg-muted-bg transition-colors"
+                >
+                  <span className="font-bold text-dark-purple flex items-center space-x-2">
+                    <Key className="w-5 h-5" />
+                    <span>Product Key</span>
+                  </span>
+                  {productKeyOpen ? (
+                    <ChevronUp className="w-5 h-5 text-dark-purple" />
+                  ) : (
+                    <ChevronDown className="w-5 h-5 text-dark-purple" />
+                  )}
+                </button>
+
+                {productKeyOpen && (
+                  <div className="p-6 bg-lighter-bg rounded-xl space-y-4 text-sm text-secondary">
+                    <p>
+                      Manage your product key. You can change it if you have a
+                      different license or purchased a new one with a different email.
+                    </p>
+                    <div className="flex items-center gap-3">
+                      {productKey && (
+                        <p className="font-mono text-dark-purple bg-white px-3 py-2 rounded-lg border-2 border-dark-purple select-all flex-1">
+                          {productKey}
+                        </p>
+                      )}
+                      <button
+                        onClick={openProductKeyModal}
+                        className="btn-chunky bg-white border-2 border-dark-purple text-dark-purple px-4 py-2 hover:bg-light-bg flex items-center space-x-2 whitespace-nowrap"
+                      >
+                        <Key className="w-4 h-4" />
+                        <span>{productKey ? "Change" : "Enter Product Key"}</span>
                       </button>
                     </div>
                   </div>
