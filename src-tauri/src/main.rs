@@ -915,6 +915,50 @@ async fn convert_images_to_multipage_pdf(
     // Build ImageMagick command: magick input1.jpg input2.png ... output.pdf
     let mut command = create_command(&tool_path);
     
+    // On macOS, set environment variables for ImageMagick to find its bundled libraries
+    #[cfg(target_os = "macos")]
+    {
+        // tool_path is: ~/Library/Application Support/com.convertsave/imagemagick/bin/magick
+        if let Some(bin_dir) = tool_path.parent() {
+            if let Some(imagemagick_dir) = bin_dir.parent() {
+                let lib_dir = imagemagick_dir.join("lib");
+                let etc_dir = imagemagick_dir.join("etc").join("ImageMagick-7");
+                
+                info!("Setting DYLD_LIBRARY_PATH: {}", lib_dir.display());
+                info!("Setting MAGICK_HOME: {}", imagemagick_dir.display());
+                
+                command.env("DYLD_LIBRARY_PATH", &lib_dir);
+                command.env("MAGICK_HOME", &imagemagick_dir);
+                
+                // Set configuration path if it exists
+                if etc_dir.exists() {
+                    info!("Setting MAGICK_CONFIGURE_PATH: {}", etc_dir.display());
+                    command.env("MAGICK_CONFIGURE_PATH", &etc_dir);
+                } else {
+                    warn!("Configuration directory not found: {}", etc_dir.display());
+                }
+                
+                // Set module path for builds with --with-modules enabled
+                if let Ok(entries) = std::fs::read_dir(&lib_dir) {
+                    for entry in entries.flatten() {
+                        let path = entry.path();
+                        if path.is_dir() && path.file_name()
+                            .and_then(|n| n.to_str())
+                            .map(|n| n.starts_with("ImageMagick-"))
+                            .unwrap_or(false) {
+                            let modules_coders = path.join("modules-Q16HDRI").join("coders");
+                            if modules_coders.exists() {
+                                info!("Setting MAGICK_CODER_MODULE_PATH: {}", modules_coders.display());
+                                command.env("MAGICK_CODER_MODULE_PATH", &modules_coders);
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
     // Add all input files
     for input_path in &input_paths {
         command.arg(input_path);
