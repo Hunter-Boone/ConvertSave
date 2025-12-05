@@ -3944,7 +3944,33 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_http::init())
-        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin({
+            // For dev builds, add GitHub PAT for private repo access
+            #[cfg(feature = "dev-build")]
+            {
+                use reqwest::header::{HeaderMap, HeaderValue, AUTHORIZATION, ACCEPT, USER_AGENT};
+                
+                let mut builder = tauri_plugin_updater::Builder::new();
+                // The PAT is injected at compile time for dev builds
+                if let Some(pat) = option_env!("GITHUB_PAT") {
+                    if !pat.is_empty() {
+                        let mut headers = HeaderMap::new();
+                        if let Ok(auth_value) = HeaderValue::from_str(&format!("token {}", pat)) {
+                            headers.insert(AUTHORIZATION, auth_value);
+                        }
+                        headers.insert(ACCEPT, HeaderValue::from_static("application/octet-stream"));
+                        headers.insert(USER_AGENT, HeaderValue::from_static("ConvertSave-Dev-Updater"));
+                        builder = builder.headers(headers);
+                        info!("Dev build: Updater configured with GitHub PAT authentication");
+                    }
+                }
+                builder.build()
+            }
+            #[cfg(not(feature = "dev-build"))]
+            {
+                tauri_plugin_updater::Builder::new().build()
+            }
+        })
         .invoke_handler(tauri::generate_handler![
             get_available_formats,
             convert_file,
