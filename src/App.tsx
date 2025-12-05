@@ -174,6 +174,7 @@ function App() {
   } | null>(null);
   const [toolsReady, setToolsReady] = useState<boolean | null>(null);
   const [showToolManager, setShowToolManager] = useState(false);
+  const [toolSetupDismissed, setToolSetupDismissed] = useState(false);
   const [availableFormats, setAvailableFormats] = useState<string[]>([]);
   const [isDraggingOver, setIsDraggingOver] = useState(false);
   const [updateAvailable, setUpdateAvailable] = useState(false);
@@ -547,6 +548,7 @@ function App() {
 
   const handleToolsReady = () => {
     setShowToolManager(false);
+    setToolSetupDismissed(true);
     // Re-check status to update the UI properly
     checkToolsStatus();
   };
@@ -1000,8 +1002,8 @@ function App() {
     );
   }
 
-  // Show tool downloader if tools aren't ready OR if user manually opens tool manager
-  if (toolsReady === false || showToolManager) {
+  // Show tool downloader if tools aren't ready (and user hasn't dismissed it) OR if user manually opens tool manager
+  if ((toolsReady === false && !toolSetupDismissed) || showToolManager) {
     return (
       <ToolDownloader
         onAllToolsReady={handleToolsReady}

@@ -3,7 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { open } from "@tauri-apps/plugin-dialog";
 import { open as openUrl } from "@tauri-apps/plugin-shell";
-import { Check, X, Loader, ChevronDown, ChevronUp, Bug, Key } from "lucide-react";
+import { Check, X, Loader, ChevronDown, Key, Bug, FileText } from "lucide-react";
 import {
   LGPL_V3_LICENSE,
   GPL_V3_LICENSE,
@@ -65,10 +65,10 @@ export default function ToolDownloader({
   const [ffmpegAdvancedOpen, setFfmpegAdvancedOpen] = useState(false);
   const [imagemagickAdvancedOpen, setImagemagickAdvancedOpen] = useState(false);
   const [licenseAttributionOpen, setLicenseAttributionOpen] = useState(false);
-  const [aboutOpen, setAboutOpen] = useState(false);
-  const [legalOpen, setLegalOpen] = useState(false);
+  const [supportOpen, setSupportOpen] = useState(false);
   const [showLicensesModal, setShowLicensesModal] = useState(false);
   const [expandedLicense, setExpandedLicense] = useState<string | null>(null);
+  const [showConfirmPopup, setShowConfirmPopup] = useState(false);
   
   // Product Key state
   const [productKeyOpen, setProductKeyOpen] = useState(false);
@@ -304,17 +304,16 @@ export default function ToolDownloader({
   const coreToolsReady =
     toolStatus.ffmpeg.available || toolStatus.imagemagick.available;
 
-  const handleCloseClick = () => {
+  const handleContinueClick = () => {
     if (!coreToolsReady) {
-      setError(
-        "At least one conversion tool must be installed before you can use ConvertSave."
-      );
-      // Clear the error after a few seconds
-      setTimeout(() => {
-        setError(null);
-      }, 5000);
+      setShowConfirmPopup(true);
       return;
     }
+    onAllToolsReady();
+  };
+
+  const handleConfirmContinue = () => {
+    setShowConfirmPopup(false);
     onAllToolsReady();
   };
 
@@ -446,11 +445,11 @@ export default function ToolDownloader({
                 className="w-full p-4 bg-white border-2 border-dark-purple rounded-xl flex items-center justify-between hover:bg-light-bg transition-colors"
               >
                 <span className="font-bold text-dark-purple">GNU LGPLv3</span>
-                {expandedLicense === "lgpl" ? (
-                  <ChevronUp className="w-5 h-5 text-dark-purple" />
-                ) : (
-                  <ChevronDown className="w-5 h-5 text-dark-purple" />
-                )}
+                <ChevronDown
+                  className={`w-5 h-5 text-dark-purple transition-transform duration-300 ${
+                    expandedLicense === "lgpl" ? "rotate-180" : ""
+                  }`}
+                />
               </button>
               {expandedLicense === "lgpl" && (
                 <div className="p-4 bg-light-bg rounded-xl text-xs text-secondary whitespace-pre-wrap font-mono max-h-96 overflow-y-auto">
@@ -466,11 +465,11 @@ export default function ToolDownloader({
                 className="w-full p-4 bg-white border-2 border-dark-purple rounded-xl flex items-center justify-between hover:bg-light-bg transition-colors"
               >
                 <span className="font-bold text-dark-purple">GNU GPLv3</span>
-                {expandedLicense === "gpl" ? (
-                  <ChevronUp className="w-5 h-5 text-dark-purple" />
-                ) : (
-                  <ChevronDown className="w-5 h-5 text-dark-purple" />
-                )}
+                <ChevronDown
+                  className={`w-5 h-5 text-dark-purple transition-transform duration-300 ${
+                    expandedLicense === "gpl" ? "rotate-180" : ""
+                  }`}
+                />
               </button>
               {expandedLicense === "gpl" && (
                 <div className="p-4 bg-light-bg rounded-xl text-xs text-secondary whitespace-pre-wrap font-mono max-h-96 overflow-y-auto">
@@ -490,11 +489,11 @@ export default function ToolDownloader({
                 <span className="font-bold text-dark-purple">
                   ImageMagick License
                 </span>
-                {expandedLicense === "imagemagick" ? (
-                  <ChevronUp className="w-5 h-5 text-dark-purple" />
-                ) : (
-                  <ChevronDown className="w-5 h-5 text-dark-purple" />
-                )}
+                <ChevronDown
+                  className={`w-5 h-5 text-dark-purple transition-transform duration-300 ${
+                    expandedLicense === "imagemagick" ? "rotate-180" : ""
+                  }`}
+                />
               </button>
               {expandedLicense === "imagemagick" && (
                 <div className="p-4 bg-light-bg rounded-xl text-xs text-secondary whitespace-pre-wrap font-mono max-h-96 overflow-y-auto">
@@ -514,11 +513,11 @@ export default function ToolDownloader({
                 <span className="font-bold text-dark-purple">
                   Lucide License (ISC/MIT)
                 </span>
-                {expandedLicense === "lucide" ? (
-                  <ChevronUp className="w-5 h-5 text-dark-purple" />
-                ) : (
-                  <ChevronDown className="w-5 h-5 text-dark-purple" />
-                )}
+                <ChevronDown
+                  className={`w-5 h-5 text-dark-purple transition-transform duration-300 ${
+                    expandedLicense === "lucide" ? "rotate-180" : ""
+                  }`}
+                />
               </button>
               {expandedLicense === "lucide" && (
                 <div className="p-4 bg-light-bg rounded-xl text-xs text-secondary whitespace-pre-wrap font-mono max-h-96 overflow-y-auto">
@@ -530,89 +529,60 @@ export default function ToolDownloader({
         </div>
       )}
 
-      <div className="h-screen bg-light-bg flex flex-col overflow-hidden relative">
-        {/* Top Right Buttons */}
-        <div className="absolute top-6 right-6 z-50 flex items-center space-x-2">
-          {/* Report a Bug Button */}
-          <button
-            onClick={async () => {
-              try {
-                await openUrl("https://github.com/Hunter-Boone/ConvertSave-Support/issues");
-              } catch (err) {
-                setError(`Failed to open link: ${err}`);
-              }
-            }}
-            className="h-10 px-4 bg-white hover:bg-mint-accent rounded-lg flex items-center justify-center transition-colors shadow-lg border-2 border-dark-purple"
-            aria-label="Report a Bug"
-            title="Report a bug on GitHub"
+      {/* Confirmation Popup */}
+      {showConfirmPopup && (
+        <div
+          className="fixed inset-0 z-[200] flex items-center justify-center bg-dark-purple bg-opacity-50"
+          onClick={() => setShowConfirmPopup(false)}
+        >
+          <div
+            className="bg-white rounded-xl shadow-2xl max-w-md w-full mx-4 overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
           >
-            <Bug className="w-5 h-5 text-dark-purple mr-2" />
-            <span className="text-sm font-bold text-dark-purple">
-              Report a Bug
-            </span>
-          </button>
-
-          {/* View Logs Button */}
-          <button
-            onClick={async () => {
-              try {
-                await invoke("open_log_directory");
-              } catch (err) {
-                setError(`Failed to open logs: ${err}`);
-              }
-            }}
-            className="h-10 px-4 bg-white hover:bg-mint-accent rounded-lg flex items-center justify-center transition-colors shadow-lg border-2 border-dark-purple"
-            aria-label="View Logs"
-            title="Open log directory"
-          >
-            <svg
-              className="w-5 h-5 text-dark-purple mr-2"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-              />
-            </svg>
-            <span className="text-sm font-bold text-dark-purple">
-              View Logs
-            </span>
-          </button>
-
-          {/* Close Button */}
-          <button
-            onClick={handleCloseClick}
-            className="w-10 h-10 bg-white hover:bg-pink rounded-lg flex items-center justify-center transition-colors shadow-lg border-2 border-dark-purple"
-            aria-label="Close Tools Manager"
-            title="Back to main app"
-          >
-            <X className="w-6 h-6 text-dark-purple" />
-          </button>
+            <div className="p-6 space-y-4">
+              <h2 className="text-xl font-bold text-dark-purple">Are you sure?</h2>
+              <p className="text-secondary">
+                Install at least one tool to support more conversion formats.
+              </p>
+              <div className="flex space-x-3 pt-2">
+                <button
+                  onClick={() => setShowConfirmPopup(false)}
+                  className="flex-1 py-3 rounded-xl font-bold border-2 border-dark-purple bg-white text-dark-purple hover:bg-light-bg transition-colors"
+                >
+                  Go Back
+                </button>
+                <button
+                  onClick={handleConfirmContinue}
+                  className="flex-1 py-3 rounded-xl font-bold border-2 border-dark-purple bg-mint-accent text-dark-purple hover:bg-opacity-80 transition-colors"
+                >
+                  Continue Anyway
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
+      )}
 
+      <div className="h-screen bg-light-bg flex flex-col overflow-hidden relative">
         {/* Main Content Area */}
         <div className="flex-1 overflow-y-auto overflow-x-hidden">
-          <div className="p-6 flex items-center justify-center min-h-full pt-20">
+          <div className="p-6 flex items-center justify-center min-h-full pt-6">
             <div className="max-w-2xl w-full space-y-6">
               {/* Header */}
               <div className="text-center space-y-2">
                 <h1 className="text-3xl font-bold text-dark-purple">
-                  Welcome to ConvertSave!
+                  Tools & Settings
                 </h1>
                 <p className="text-lg text-secondary">
-                  To get started, you need to install at least one conversion
-                  tool.
+                  Convert the most formats when you install these open-source
+                  tools. We make it simple with one click!
                 </p>
               </div>
 
               {/* Tool Cards */}
               <div className="space-y-4">
                 {/* FFmpeg Card */}
-                <div className="bg-white border-2 border-dark-purple rounded-xl p-6">
+                <div className="bg-lighter-bg border-2 border-dark-purple rounded-xl p-6">
                   <div className="flex items-center justify-between mb-4">
                     <div className="flex-1">
                       <div className="flex items-center space-x-3 flex-wrap mb-2">
@@ -632,7 +602,7 @@ export default function ToolDownloader({
                         )}
                       </div>
                       <p className="text-secondary">
-                        Used to convert most image formats.
+                        Best for audio and video conversions.
                       </p>
                     </div>
                     {!toolStatus.ffmpeg.available && (
@@ -659,40 +629,63 @@ export default function ToolDownloader({
                     className="flex items-center space-x-2 text-dark-purple font-bold hover:text-secondary transition-colors"
                   >
                     <span>Advanced</span>
-                    {ffmpegAdvancedOpen ? (
-                      <ChevronUp className="w-4 h-4" />
-                    ) : (
-                      <ChevronDown className="w-4 h-4" />
-                    )}
+                    <ChevronDown
+                      className={`w-4 h-4 transition-transform duration-300 ${
+                        ffmpegAdvancedOpen ? "rotate-180" : ""
+                      }`}
+                    />
                   </button>
 
-                  {ffmpegAdvancedOpen && (
-                    <div className="mt-4 p-4 bg-light-bg rounded-lg space-y-3">
-                      <p className="text-sm text-secondary">
-                        You can also download FFmpeg directly and select a
-                        custom path.
-                      </p>
-                      <div className="flex space-x-2">
-                        <button
-                          onClick={() => selectCustomPath("ffmpeg")}
-                          className="btn-chunky bg-white border-2 border-dark-purple text-dark-purple px-4 py-2 text-sm hover:bg-light-bg"
-                        >
-                          Select Custom Path
-                        </button>
-                        <button
-                          onClick={() => useDefaultPath("ffmpeg")}
-                          className="btn-chunky bg-white border-2 border-dark-purple text-dark-purple px-4 py-2 text-sm hover:bg-light-bg"
-                        >
-                          Use Default Path
-                        </button>
-                      </div>
-                      {toolStatus.ffmpeg.path && (
-                        <p className="text-xs text-secondary font-mono mt-2 break-all">
-                          {toolStatus.ffmpeg.path}
+                  {/* Animated Advanced Content */}
+                  <div
+                    className={`grid transition-all duration-300 ease-in-out ${
+                      ffmpegAdvancedOpen
+                        ? "grid-rows-[1fr] opacity-100"
+                        : "grid-rows-[0fr] opacity-0"
+                    }`}
+                  >
+                    <div className="overflow-hidden">
+                      <div className="pt-4 space-y-3">
+                        <p className="text-sm text-secondary">
+                          You can also download{" "}
+                          <a
+                            href="#"
+                            onClick={async (e) => {
+                              e.preventDefault();
+                              try {
+                                await openUrl("https://ffmpeg.org");
+                              } catch (err) {
+                                setError(`Failed to open link: ${err}`);
+                              }
+                            }}
+                            className="text-blue-accent underline hover:text-dark-purple"
+                          >
+                            FFmpeg
+                          </a>{" "}
+                          directly and select a custom path.
                         </p>
-                      )}
+                        <div className="flex space-x-2">
+                          <button
+                            onClick={() => selectCustomPath("ffmpeg")}
+                            className="btn-chunky bg-white border-2 border-dark-purple text-dark-purple px-4 py-2 text-sm hover:bg-light-bg"
+                          >
+                            Select Custom Path
+                          </button>
+                          <button
+                            onClick={() => useDefaultPath("ffmpeg")}
+                            className="btn-chunky bg-white border-2 border-dark-purple text-dark-purple px-4 py-2 text-sm hover:bg-light-bg"
+                          >
+                            Use Default Path
+                          </button>
+                        </div>
+                        {toolStatus.ffmpeg.path && (
+                          <p className="text-xs text-secondary font-mono mt-2 break-all">
+                            {toolStatus.ffmpeg.path}
+                          </p>
+                        )}
+                      </div>
                     </div>
-                  )}
+                  </div>
                 </div>
 
                 {/* DISABLED: Pandoc functionality temporarily disabled */}
@@ -767,7 +760,7 @@ export default function ToolDownloader({
               </div> */}
 
                 {/* ImageMagick Card */}
-                <div className="bg-white border-2 border-dark-purple rounded-xl p-6">
+                <div className="bg-lighter-bg border-2 border-dark-purple rounded-xl p-6">
                   <div className="flex items-center justify-between mb-4">
                     <div className="flex-1">
                       <div className="flex items-center space-x-3 flex-wrap mb-2">
@@ -787,7 +780,7 @@ export default function ToolDownloader({
                         )}
                       </div>
                       <p className="text-secondary">
-                        Adds additional features, including HEIC encoding.
+                        Best for image, image to PDF, and HEIC conversions.
                       </p>
                     </div>
                     {!toolStatus.imagemagick.available && (
@@ -816,52 +809,77 @@ export default function ToolDownloader({
                     className="flex items-center space-x-2 text-dark-purple font-bold hover:text-secondary transition-colors"
                   >
                     <span>Advanced</span>
-                    {imagemagickAdvancedOpen ? (
-                      <ChevronUp className="w-4 h-4" />
-                    ) : (
-                      <ChevronDown className="w-4 h-4" />
-                    )}
+                    <ChevronDown
+                      className={`w-4 h-4 transition-transform duration-300 ${
+                        imagemagickAdvancedOpen ? "rotate-180" : ""
+                      }`}
+                    />
                   </button>
 
-                  {imagemagickAdvancedOpen && (
-                    <div className="mt-4 p-4 bg-light-bg rounded-lg space-y-3">
-                      <p className="text-sm text-secondary">
-                        You can also download ImageMagick directly and select a
-                        custom path.
-                      </p>
-                      <div className="flex space-x-2">
-                        <button
-                          onClick={() => selectCustomPath("imagemagick")}
-                          className="btn-chunky bg-white border-2 border-dark-purple text-dark-purple px-4 py-2 text-sm hover:bg-light-bg"
-                        >
-                          Select Custom Path
-                        </button>
-                        <button
-                          onClick={() => useDefaultPath("imagemagick")}
-                          className="btn-chunky bg-white border-2 border-dark-purple text-dark-purple px-4 py-2 text-sm hover:bg-light-bg"
-                        >
-                          Use Default Path
-                        </button>
-                      </div>
-                      {toolStatus.imagemagick.path && (
-                        <p className="text-xs text-secondary font-mono mt-2 break-all">
-                          {toolStatus.imagemagick.path}
+                  {/* Animated Advanced Content */}
+                  <div
+                    className={`grid transition-all duration-300 ease-in-out ${
+                      imagemagickAdvancedOpen
+                        ? "grid-rows-[1fr] opacity-100"
+                        : "grid-rows-[0fr] opacity-0"
+                    }`}
+                  >
+                    <div className="overflow-hidden">
+                      <div className="pt-4 space-y-3">
+                        <p className="text-sm text-secondary">
+                          You can also download{" "}
+                          <a
+                            href="#"
+                            onClick={async (e) => {
+                              e.preventDefault();
+                              try {
+                                await openUrl("https://imagemagick.org");
+                              } catch (err) {
+                                setError(`Failed to open link: ${err}`);
+                              }
+                            }}
+                            className="text-blue-accent underline hover:text-dark-purple"
+                          >
+                            ImageMagick
+                          </a>{" "}
+                          directly and select a custom path.
                         </p>
-                      )}
+                        <div className="flex space-x-2">
+                          <button
+                            onClick={() => selectCustomPath("imagemagick")}
+                            className="btn-chunky bg-white border-2 border-dark-purple text-dark-purple px-4 py-2 text-sm hover:bg-light-bg"
+                          >
+                            Select Custom Path
+                          </button>
+                          <button
+                            onClick={() => useDefaultPath("imagemagick")}
+                            className="btn-chunky bg-white border-2 border-dark-purple text-dark-purple px-4 py-2 text-sm hover:bg-light-bg"
+                          >
+                            Use Default Path
+                          </button>
+                        </div>
+                        {toolStatus.imagemagick.path && (
+                          <p className="text-xs text-secondary font-mono mt-2 break-all">
+                            {toolStatus.imagemagick.path}
+                          </p>
+                        )}
+                      </div>
                     </div>
-                  )}
+                  </div>
                 </div>
               </div>
 
               {/* Continue Button */}
-              {coreToolsReady && (
-                <button
-                  onClick={onAllToolsReady}
-                  className="btn-chunky bg-mint-accent border-2 border-dark-purple text-dark-purple px-8 py-4 text-lg w-full"
-                >
-                  Continue
-                </button>
-              )}
+              <button
+                onClick={handleContinueClick}
+                className={`btn-chunky border-2 border-dark-purple text-dark-purple px-8 py-4 text-lg w-full transition-colors ${
+                  coreToolsReady
+                    ? "bg-mint-accent"
+                    : "bg-transparent hover:bg-mint-accent"
+                }`}
+              >
+                Continue
+              </button>
 
               {/* Download Progress */}
               {downloadProgress && downloadProgress.status !== "complete" && (
@@ -916,213 +934,273 @@ export default function ToolDownloader({
                 </div>
               )}
 
+              {/* Product Key Section */}
+              <div className="bg-lighter-bg rounded-xl overflow-hidden">
+                <button
+                  onClick={() => setProductKeyOpen(!productKeyOpen)}
+                  className="w-full px-6 py-4 flex items-center justify-between hover:bg-muted-bg transition-colors"
+                >
+                  <span className="font-bold text-dark-purple">Product Key</span>
+                  <ChevronDown
+                    className={`w-5 h-5 text-dark-purple transition-transform duration-300 ${
+                      productKeyOpen ? "rotate-180" : ""
+                    }`}
+                  />
+                </button>
+
+                {/* Animated Content */}
+                <div
+                  className={`grid transition-all duration-300 ease-in-out ${
+                    productKeyOpen
+                      ? "grid-rows-[1fr] opacity-100"
+                      : "grid-rows-[0fr] opacity-0"
+                  }`}
+                >
+                  <div className="overflow-hidden">
+                    <div className="px-6 pb-6 space-y-4 text-sm text-secondary">
+                      <p>
+                        Manage your product key. You can change it if you have a
+                        different license or purchased a new one with a different email.
+                      </p>
+                      <div className="flex items-center gap-3">
+                        {productKey && (
+                          <p className="font-mono text-dark-purple bg-white px-3 py-2 rounded-lg border-2 border-dark-purple select-all flex-1">
+                            {productKey}
+                          </p>
+                        )}
+                        <button
+                          onClick={openProductKeyModal}
+                          className="btn-chunky bg-white border-2 border-dark-purple text-dark-purple px-4 py-2 hover:bg-light-bg flex items-center space-x-2 whitespace-nowrap"
+                        >
+                          <Key className="w-4 h-4" />
+                          <span>{productKey ? "Change" : "Enter Product Key"}</span>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Support Section */}
+              <div className="bg-lighter-bg rounded-xl overflow-hidden">
+                <button
+                  onClick={() => setSupportOpen(!supportOpen)}
+                  className="w-full px-6 py-4 flex items-center justify-between hover:bg-muted-bg transition-colors"
+                >
+                  <span className="font-bold text-dark-purple">Support</span>
+                  <ChevronDown
+                    className={`w-5 h-5 text-dark-purple transition-transform duration-300 ${
+                      supportOpen ? "rotate-180" : ""
+                    }`}
+                  />
+                </button>
+
+                {/* Animated Content */}
+                <div
+                  className={`grid transition-all duration-300 ease-in-out ${
+                    supportOpen
+                      ? "grid-rows-[1fr] opacity-100"
+                      : "grid-rows-[0fr] opacity-0"
+                  }`}
+                >
+                  <div className="overflow-hidden">
+                    <div className="px-6 pb-6 space-y-4 text-sm text-secondary">
+                      <p>
+                        Need help? Check our{" "}
+                        <a
+                          href="#"
+                          onClick={async (e) => {
+                            e.preventDefault();
+                            try {
+                              await openUrl("https://convertsave.com/#faq");
+                            } catch (err) {
+                              setError(`Failed to open link: ${err}`);
+                            }
+                          }}
+                          className="text-blue-accent underline hover:text-dark-purple"
+                        >
+                          website
+                        </a>{" "}
+                        FAQ or email us at team@convertsave.com and we'll do our
+                        best to answer your questions.
+                      </p>
+                      <p>
+                        If you find a bug, you can report it with the button below:
+                      </p>
+                      <div className="flex flex-wrap gap-3">
+                        <button
+                          onClick={async () => {
+                            try {
+                              await openUrl("https://github.com/Hunter-Boone/ConvertSave-Support/issues");
+                            } catch (err) {
+                              setError(`Failed to open link: ${err}`);
+                            }
+                          }}
+                          className="btn-chunky bg-white border-2 border-dark-purple text-dark-purple px-4 py-2 hover:bg-light-bg flex items-center space-x-2"
+                        >
+                          <Bug className="w-4 h-4" />
+                          <span>Report A Bug</span>
+                        </button>
+                        <button
+                          onClick={async () => {
+                            try {
+                              await invoke("open_log_directory");
+                            } catch (err) {
+                              setError(`Failed to open logs: ${err}`);
+                            }
+                          }}
+                          className="btn-chunky bg-white border-2 border-dark-purple text-dark-purple px-4 py-2 hover:bg-light-bg flex items-center space-x-2"
+                        >
+                          <FileText className="w-4 h-4" />
+                          <span>View Logs</span>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
               {/* License & Attribution Section */}
-              <div className="space-y-2">
+              <div className="bg-lighter-bg rounded-xl overflow-hidden">
                 <button
                   onClick={() =>
                     setLicenseAttributionOpen(!licenseAttributionOpen)
                   }
-                  className="w-full p-4 bg-lighter-bg rounded-xl flex items-center justify-between hover:bg-muted-bg transition-colors"
+                  className="w-full px-6 py-4 flex items-center justify-between hover:bg-muted-bg transition-colors"
                 >
                   <span className="font-bold text-dark-purple">
                     License & Attribution
                   </span>
-                  {licenseAttributionOpen ? (
-                    <ChevronUp className="w-5 h-5 text-dark-purple" />
-                  ) : (
-                    <ChevronDown className="w-5 h-5 text-dark-purple" />
-                  )}
+                  <ChevronDown
+                    className={`w-5 h-5 text-dark-purple transition-transform duration-300 ${
+                      licenseAttributionOpen ? "rotate-180" : ""
+                    }`}
+                  />
                 </button>
 
-                {licenseAttributionOpen && (
-                  <div className="p-6 bg-lighter-bg rounded-xl space-y-6 text-sm text-secondary">
-                    <p>
-                      The following tools are downloaded separately and from
-                      official sources in order to comply with their respective
-                      licenses.
-                    </p>
-
-                    <div className="space-y-3">
-                      <h3 className="font-bold text-dark-purple">FFmpeg</h3>
-                      <p>
-                        FFmpeg is the leading multimedia framework, able to
-                        decode, encode, transcode, mux, demux, stream, filter
-                        and play pretty much anything that humans and machines
-                        have created.
-                      </p>
-                      <p>
-                        FFmpeg is licensed under the GNU Lesser General Public
-                        License (LGPL) version 2.1 or later. However, FFmpeg
-                        incorporates several optional parts and optimizations
-                        that are covered by the GNU General Public License (GPL)
-                        version 2 or later. For more information, visit{" "}
-                        <a
-                          href="https://www.ffmpeg.org/legal.html"
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-blue-accent underline hover:text-dark-purple"
-                        >
-                          https://www.ffmpeg.org/legal.html
-                        </a>
-                        .
-                      </p>
-                      <p>
-                        FFmpeg is a trademark of Fabrice Bellard, originator of
-                        the FFmpeg project.
-                      </p>
-                    </div>
-
-                    <div className="space-y-3">
-                      <h3 className="font-bold text-dark-purple">
-                        ImageMagick
-                      </h3>
-                      <p>
-                        ImageMagick is a free, open-source software suite, used
-                        for editing and manipulating digital images.
-                      </p>
-                      <p>
-                        ImageMagick is licensed under the ImageMagick License.
-                        For more information, visit{" "}
-                        <a
-                          href="https://imagemagick.org/script/license.php"
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-blue-accent underline hover:text-dark-purple"
-                        >
-                          https://imagemagick.org/script/license.php
-                        </a>
-                        .
-                      </p>
-                      <p>
-                        Copyright © 1999 ImageMagick Studio LLC, a non-profit
-                        organization dedicated to making software imaging
-                        solutions freely available.
-                      </p>
-                    </div>
-
-                    <button
-                      onClick={() => setShowLicensesModal(true)}
-                      className="btn-chunky bg-white border-2 border-dark-purple text-dark-purple px-6 py-3 hover:bg-light-bg"
-                    >
-                      Licenses
-                    </button>
-                  </div>
-                )}
-              </div>
-
-              {/* About Section */}
-              <div className="space-y-2">
-                <button
-                  onClick={() => setAboutOpen(!aboutOpen)}
-                  className="w-full p-4 bg-lighter-bg rounded-xl flex items-center justify-between hover:bg-muted-bg transition-colors"
+                {/* Animated Content */}
+                <div
+                  className={`grid transition-all duration-300 ease-in-out ${
+                    licenseAttributionOpen
+                      ? "grid-rows-[1fr] opacity-100"
+                      : "grid-rows-[0fr] opacity-0"
+                  }`}
                 >
-                  <span className="font-bold text-dark-purple">About</span>
-                  {aboutOpen ? (
-                    <ChevronUp className="w-5 h-5 text-dark-purple" />
-                  ) : (
-                    <ChevronDown className="w-5 h-5 text-dark-purple" />
-                  )}
-                </button>
+                  <div className="overflow-hidden">
+                    <div className="px-6 pb-6 space-y-6 text-sm text-secondary">
+                      <p>
+                        FFmpeg and ImageMagick are developed and maintained by their
+                        respective authors, who retain all associated copyrights.
+                        These tools are downloaded or compiled from official sources
+                        and installed separately by the user in order to comply with
+                        their licenses.
+                      </p>
 
-                {aboutOpen && (
-                  <div className="p-6 bg-lighter-bg rounded-xl text-sm text-secondary">
-                    <p>
-                      ConvertSave helps you quickly convert images locally on
-                      your computer.
-                    </p>
-                  </div>
-                )}
-              </div>
-
-              {/* Legal Section */}
-              <div className="space-y-2">
-                <button
-                  onClick={() => setLegalOpen(!legalOpen)}
-                  className="w-full p-4 bg-lighter-bg rounded-xl flex items-center justify-between hover:bg-muted-bg transition-colors"
-                >
-                  <span className="font-bold text-dark-purple">Legal</span>
-                  {legalOpen ? (
-                    <ChevronUp className="w-5 h-5 text-dark-purple" />
-                  ) : (
-                    <ChevronDown className="w-5 h-5 text-dark-purple" />
-                  )}
-                </button>
-
-                {legalOpen && (
-                  <div className="p-6 bg-lighter-bg rounded-xl space-y-4 text-sm text-secondary">
-                    <p>
-                      Please review our legal documents for information about
-                      how we handle your data and the terms of using ConvertSave.
-                    </p>
-                    <div className="flex flex-wrap gap-3">
-                      <button
-                        onClick={async () => {
-                          try {
-                            await openUrl("https://convertsave.com/privacy");
-                          } catch (err) {
-                            setError(`Failed to open link: ${err}`);
-                          }
-                        }}
-                        className="btn-chunky bg-white border-2 border-dark-purple text-dark-purple px-6 py-3 hover:bg-light-bg"
-                      >
-                        Privacy Policy
-                      </button>
-                      <button
-                        onClick={async () => {
-                          try {
-                            await openUrl("https://convertsave.com/terms");
-                          } catch (err) {
-                            setError(`Failed to open link: ${err}`);
-                          }
-                        }}
-                        className="btn-chunky bg-white border-2 border-dark-purple text-dark-purple px-6 py-3 hover:bg-light-bg"
-                      >
-                        Terms & Conditions
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Product Key Section */}
-              <div className="space-y-2">
-                <button
-                  onClick={() => setProductKeyOpen(!productKeyOpen)}
-                  className="w-full p-4 bg-lighter-bg rounded-xl flex items-center justify-between hover:bg-muted-bg transition-colors"
-                >
-                  <span className="font-bold text-dark-purple flex items-center space-x-2">
-                    <Key className="w-5 h-5" />
-                    <span>Product Key</span>
-                  </span>
-                  {productKeyOpen ? (
-                    <ChevronUp className="w-5 h-5 text-dark-purple" />
-                  ) : (
-                    <ChevronDown className="w-5 h-5 text-dark-purple" />
-                  )}
-                </button>
-
-                {productKeyOpen && (
-                  <div className="p-6 bg-lighter-bg rounded-xl space-y-4 text-sm text-secondary">
-                    <p>
-                      Manage your product key. You can change it if you have a
-                      different license or purchased a new one with a different email.
-                    </p>
-                    <div className="flex items-center gap-3">
-                      {productKey && (
-                        <p className="font-mono text-dark-purple bg-white px-3 py-2 rounded-lg border-2 border-dark-purple select-all flex-1">
-                          {productKey}
+                      <div className="space-y-3">
+                        <h3 className="font-bold text-dark-purple">FFmpeg</h3>
+                        <p>
+                          FFmpeg is the leading multimedia framework, able to
+                          decode, encode, transcode, mux, demux, stream, filter
+                          and play pretty much anything that humans and machines
+                          have created.
                         </p>
-                      )}
+                        <p>
+                          FFmpeg is licensed under the GNU Lesser General Public
+                          License (LGPL) version 2.1 or later. However, FFmpeg
+                          incorporates several optional parts and optimizations
+                          that are covered by the GNU General Public License (GPL)
+                          version 2 or later. For more information, visit{" "}
+                          <a
+                            href="https://www.ffmpeg.org/legal.html"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-blue-accent underline hover:text-dark-purple"
+                          >
+                            https://www.ffmpeg.org/legal.html
+                          </a>
+                          .
+                        </p>
+                        <p>
+                          FFmpeg is a trademark of Fabrice Bellard, originator of
+                          the FFmpeg project.
+                        </p>
+                      </div>
+
+                      <div className="space-y-3">
+                        <h3 className="font-bold text-dark-purple">
+                          ImageMagick
+                        </h3>
+                        <p>
+                          ImageMagick is a free, open-source software suite, used
+                          for editing and manipulating digital images.
+                        </p>
+                        <p>
+                          ImageMagick is licensed under the ImageMagick License.
+                          For more information, visit{" "}
+                          <a
+                            href="https://imagemagick.org/script/license.php"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-blue-accent underline hover:text-dark-purple"
+                          >
+                            https://imagemagick.org/script/license.php
+                          </a>
+                          .
+                        </p>
+                        <p>
+                          Copyright © 1999 ImageMagick Studio LLC, a non-profit
+                          organization dedicated to making software imaging
+                          solutions freely available.
+                        </p>
+                      </div>
+
                       <button
-                        onClick={openProductKeyModal}
-                        className="btn-chunky bg-white border-2 border-dark-purple text-dark-purple px-4 py-2 hover:bg-light-bg flex items-center space-x-2 whitespace-nowrap"
+                        onClick={() => setShowLicensesModal(true)}
+                        className="btn-chunky bg-white border-2 border-dark-purple text-dark-purple px-6 py-3 hover:bg-light-bg"
                       >
-                        <Key className="w-4 h-4" />
-                        <span>{productKey ? "Change" : "Enter Product Key"}</span>
+                        Licenses
                       </button>
                     </div>
                   </div>
-                )}
+                </div>
+              </div>
+
+              {/* Footer */}
+              <div className="pt-6 pb-2 text-center space-y-2">
+                <p className="text-sm text-secondary">
+                  Copyright © 2025 Pixel & Bracket LLC. All rights reserved.
+                </p>
+                <div className="flex items-center justify-center space-x-2 text-sm">
+                  <a
+                    href="#"
+                    onClick={async (e) => {
+                      e.preventDefault();
+                      try {
+                        await openUrl("https://convertsave.com/terms-of-service");
+                      } catch (err) {
+                        setError(`Failed to open link: ${err}`);
+                      }
+                    }}
+                    className="text-secondary hover:text-dark-purple transition-colors"
+                  >
+                    Terms of Service
+                  </a>
+                  <span className="text-secondary">|</span>
+                  <a
+                    href="#"
+                    onClick={async (e) => {
+                      e.preventDefault();
+                      try {
+                        await openUrl("https://convertsave.com/privacy-policy");
+                      } catch (err) {
+                        setError(`Failed to open link: ${err}`);
+                      }
+                    }}
+                    className="text-secondary hover:text-dark-purple transition-colors"
+                  >
+                    Privacy Policy
+                  </a>
+                </div>
               </div>
             </div>
           </div>

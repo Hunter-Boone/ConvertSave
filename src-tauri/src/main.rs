@@ -3341,11 +3341,14 @@ async fn get_pandoc_download_info() -> Result<(String, String, bool), String> {
 
 async fn get_imagemagick_download_info() -> Result<(String, String, bool), String> {
     if cfg!(target_os = "windows") {
-        // For Windows - use official ImageMagick portable builds
-        let latest = fetch_latest_imagemagick_version().await?;
+        // For Windows - download from ConvertSave-Libraries GitHub releases
+        let github_release_url = "https://github.com/Hunter-Boone/ConvertSave-Libraries/releases/download/latest/imagemagick-windows-x64.7z".to_string();
+        
+        info!("Downloading ImageMagick for Windows from ConvertSave-Libraries");
+        
         Ok((
-            format!("https://imagemagick.org/archive/binaries/{}", latest),
-            "imagemagick-windows.7z".to_string(),
+            github_release_url,
+            "imagemagick-windows-x64.7z".to_string(),
             true, // .7z file
         ))
     } else if cfg!(target_os = "macos") {
