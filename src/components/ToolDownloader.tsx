@@ -3,7 +3,15 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { open } from "@tauri-apps/plugin-dialog";
 import { open as openUrl } from "@tauri-apps/plugin-shell";
-import { Check, X, Loader, ChevronDown, Key, Bug, FileText } from "lucide-react";
+import {
+  Check,
+  X,
+  Loader,
+  ChevronDown,
+  Key,
+  Bug,
+  FileText,
+} from "lucide-react";
 import {
   LGPL_V3_LICENSE,
   GPL_V3_LICENSE,
@@ -69,14 +77,16 @@ export default function ToolDownloader({
   const [showLicensesModal, setShowLicensesModal] = useState(false);
   const [expandedLicense, setExpandedLicense] = useState<string | null>(null);
   const [showConfirmPopup, setShowConfirmPopup] = useState(false);
-  
+
   // Product Key state
   const [productKeyOpen, setProductKeyOpen] = useState(false);
   const [showProductKeyModal, setShowProductKeyModal] = useState(false);
   const [newProductKey, setNewProductKey] = useState("");
   const [isChangingKey, setIsChangingKey] = useState(false);
   const [productKeyError, setProductKeyError] = useState<string | null>(null);
-  const [productKeySuccess, setProductKeySuccess] = useState<string | null>(null);
+  const [productKeySuccess, setProductKeySuccess] = useState<string | null>(
+    null
+  );
 
   useEffect(() => {
     checkToolsStatus();
@@ -265,7 +275,7 @@ export default function ToolDownloader({
         onProductKeyChanged(newProductKey);
         setProductKeySuccess("Product key changed successfully!");
         setNewProductKey("");
-        
+
         // Close modal after a short delay
         setTimeout(() => {
           setShowProductKeyModal(false);
@@ -300,12 +310,16 @@ export default function ToolDownloader({
     );
   }
 
-  // Core tools required: At least one tool must be installed (FFmpeg or ImageMagick)
-  const coreToolsReady =
+  // At least one tool must be installed to avoid the confirmation popup
+  const hasAnyTool =
     toolStatus.ffmpeg.available || toolStatus.imagemagick.available;
 
+  // All tools must be installed for the button to be green
+  const allToolsReady =
+    toolStatus.ffmpeg.available && toolStatus.imagemagick.available;
+
   const handleContinueClick = () => {
-    if (!coreToolsReady) {
+    if (!hasAnyTool) {
       setShowConfirmPopup(true);
       return;
     }
@@ -331,7 +345,9 @@ export default function ToolDownloader({
           >
             {/* Modal Header */}
             <div className="flex items-center justify-between p-6 border-b border-lighter-bg">
-              <h2 className="text-2xl font-bold text-dark-purple">Product Key</h2>
+              <h2 className="text-2xl font-bold text-dark-purple">
+                Product Key
+              </h2>
               <button
                 onClick={() => setShowProductKeyModal(false)}
                 className="w-8 h-8 bg-light-grey hover:bg-pink rounded-lg flex items-center justify-center transition-colors"
@@ -392,7 +408,9 @@ export default function ToolDownloader({
               {/* Change Button */}
               <button
                 onClick={handleChangeProductKey}
-                disabled={isChangingKey || newProductKey.replace(/-/g, "").length !== 20}
+                disabled={
+                  isChangingKey || newProductKey.replace(/-/g, "").length !== 20
+                }
                 className={`w-full py-3 rounded-xl font-bold text-lg border-2 border-dark-purple transition-all ${
                   isChangingKey || newProductKey.replace(/-/g, "").length !== 20
                     ? "bg-lighter-bg text-secondary cursor-not-allowed"
@@ -540,7 +558,9 @@ export default function ToolDownloader({
             onClick={(e) => e.stopPropagation()}
           >
             <div className="p-6 space-y-4">
-              <h2 className="text-xl font-bold text-dark-purple">Are you sure?</h2>
+              <h2 className="text-xl font-bold text-dark-purple">
+                Are you sure?
+              </h2>
               <p className="text-secondary">
                 Install at least one tool to support more conversion formats.
               </p>
@@ -873,7 +893,7 @@ export default function ToolDownloader({
               <button
                 onClick={handleContinueClick}
                 className={`btn-chunky border-2 border-dark-purple text-dark-purple px-8 py-4 text-lg w-full transition-colors ${
-                  coreToolsReady
+                  allToolsReady
                     ? "bg-mint-accent"
                     : "bg-transparent hover:bg-mint-accent"
                 }`}
@@ -940,7 +960,9 @@ export default function ToolDownloader({
                   onClick={() => setProductKeyOpen(!productKeyOpen)}
                   className="w-full px-6 py-4 flex items-center justify-between hover:bg-muted-bg transition-colors"
                 >
-                  <span className="font-bold text-dark-purple">Product Key</span>
+                  <span className="font-bold text-dark-purple">
+                    Product Key
+                  </span>
                   <ChevronDown
                     className={`w-5 h-5 text-dark-purple transition-transform duration-300 ${
                       productKeyOpen ? "rotate-180" : ""
@@ -960,7 +982,8 @@ export default function ToolDownloader({
                     <div className="px-6 pb-6 space-y-4 text-sm text-secondary">
                       <p>
                         Manage your product key. You can change it if you have a
-                        different license or purchased a new one with a different email.
+                        different license or purchased a new one with a
+                        different email.
                       </p>
                       <div className="flex items-center gap-3">
                         {productKey && (
@@ -973,7 +996,9 @@ export default function ToolDownloader({
                           className="btn-chunky bg-white border-2 border-dark-purple text-dark-purple px-4 py-2 hover:bg-light-bg flex items-center space-x-2 whitespace-nowrap"
                         >
                           <Key className="w-4 h-4" />
-                          <span>{productKey ? "Change" : "Enter Product Key"}</span>
+                          <span>
+                            {productKey ? "Change" : "Enter Product Key"}
+                          </span>
                         </button>
                       </div>
                     </div>
@@ -1021,17 +1046,34 @@ export default function ToolDownloader({
                         >
                           website
                         </a>{" "}
-                        FAQ or email us at team@convertsave.com and we'll do our
-                        best to answer your questions.
+                        FAQ or email us at{" "}
+                        <a
+                          href="#"
+                          onClick={async (e) => {
+                            e.preventDefault();
+                            try {
+                              await openUrl("mailto:team@convertsave.com");
+                            } catch (err) {
+                              setError(`Failed to open link: ${err}`);
+                            }
+                          }}
+                          className="text-blue-accent underline hover:text-dark-purple"
+                        >
+                          team@convertsave.com
+                        </a>{" "}
+                        and we'll do our best to answer your questions.
                       </p>
                       <p>
-                        If you find a bug, you can report it with the button below:
+                        If you find a bug, you can report it with the button
+                        below:
                       </p>
                       <div className="flex flex-wrap gap-3">
                         <button
                           onClick={async () => {
                             try {
-                              await openUrl("https://github.com/Hunter-Boone/ConvertSave-Support/issues");
+                              await openUrl(
+                                "https://github.com/Hunter-Boone/ConvertSave-Support/issues"
+                              );
                             } catch (err) {
                               setError(`Failed to open link: ${err}`);
                             }
@@ -1089,11 +1131,11 @@ export default function ToolDownloader({
                   <div className="overflow-hidden">
                     <div className="px-6 pb-6 space-y-6 text-sm text-secondary">
                       <p>
-                        FFmpeg and ImageMagick are developed and maintained by their
-                        respective authors, who retain all associated copyrights.
-                        These tools are downloaded or compiled from official sources
-                        and installed separately by the user in order to comply with
-                        their licenses.
+                        FFmpeg and ImageMagick are developed and maintained by
+                        their respective authors, who retain all associated
+                        copyrights. These tools are downloaded or compiled from
+                        official sources and installed separately by the user in
+                        order to comply with their licenses.
                       </p>
 
                       <div className="space-y-3">
@@ -1108,8 +1150,8 @@ export default function ToolDownloader({
                           FFmpeg is licensed under the GNU Lesser General Public
                           License (LGPL) version 2.1 or later. However, FFmpeg
                           incorporates several optional parts and optimizations
-                          that are covered by the GNU General Public License (GPL)
-                          version 2 or later. For more information, visit{" "}
+                          that are covered by the GNU General Public License
+                          (GPL) version 2 or later. For more information, visit{" "}
                           <a
                             href="https://www.ffmpeg.org/legal.html"
                             target="_blank"
@@ -1121,8 +1163,8 @@ export default function ToolDownloader({
                           .
                         </p>
                         <p>
-                          FFmpeg is a trademark of Fabrice Bellard, originator of
-                          the FFmpeg project.
+                          FFmpeg is a trademark of Fabrice Bellard, originator
+                          of the FFmpeg project.
                         </p>
                       </div>
 
@@ -1131,8 +1173,8 @@ export default function ToolDownloader({
                           ImageMagick
                         </h3>
                         <p>
-                          ImageMagick is a free, open-source software suite, used
-                          for editing and manipulating digital images.
+                          ImageMagick is a free, open-source software suite,
+                          used for editing and manipulating digital images.
                         </p>
                         <p>
                           ImageMagick is licensed under the ImageMagick License.
@@ -1176,7 +1218,9 @@ export default function ToolDownloader({
                     onClick={async (e) => {
                       e.preventDefault();
                       try {
-                        await openUrl("https://convertsave.com/terms-of-service");
+                        await openUrl(
+                          "https://convertsave.com/terms-of-service"
+                        );
                       } catch (err) {
                         setError(`Failed to open link: ${err}`);
                       }

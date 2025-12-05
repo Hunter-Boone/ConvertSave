@@ -1231,7 +1231,7 @@ function App() {
                     Drop your files here to convert.
                   </h2>
                   <p className="text-lg text-secondary">
-                    Supports most common image filetypes.
+                    Supports most common media files.
                   </p>
                   <button
                     onClick={handleBrowseFiles}
