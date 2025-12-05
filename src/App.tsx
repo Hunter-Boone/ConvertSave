@@ -476,13 +476,30 @@ function App() {
 
         // Check if we have multiple image files - if so, add PDF (Multipage) option
         const imageExtensions = [
-          "jpg", "jpeg", "png", "gif", "bmp", "webp", "svg", "ico", "tiff", "tif",
-          "heic", "heif", "avif", "jxl", "tga", "exr", "hdr", "psd", "psb"
+          "jpg",
+          "jpeg",
+          "png",
+          "gif",
+          "bmp",
+          "webp",
+          "svg",
+          "ico",
+          "tiff",
+          "tif",
+          "heic",
+          "heif",
+          "avif",
+          "jxl",
+          "tga",
+          "exr",
+          "hdr",
+          "psd",
+          "psb",
         ];
         const imageFiles = selectedFiles.filter((f) =>
           imageExtensions.includes(f.extension.toLowerCase())
         );
-        
+
         // Add pdf-multipage option if there are multiple image files and PDF is available
         if (imageFiles.length > 1 && sortedFormats.includes("pdf")) {
           // Find position after regular PDF and insert pdf-multipage
