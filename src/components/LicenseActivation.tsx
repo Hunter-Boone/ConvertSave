@@ -183,12 +183,12 @@ export function LicenseActivation({
             </a>
           </p>
           <p className="text-sm text-secondary">
-            Need help?{" "}
+            Need help? Email us at{" "}
             <a
               href="mailto:support@convertsave.com"
               className="text-dark-purple font-bold hover:underline"
             >
-              Contact support
+              team@convertsave.com
             </a>
           </p>
         </div>
