@@ -582,7 +582,7 @@ export default function ToolDownloader({
               {/* Tool Cards */}
               <div className="space-y-4">
                 {/* FFmpeg Card */}
-                <div className="bg-lighter-bg border-2 border-dark-purple rounded-xl p-6">
+                <div className="bg-white border-2 border-dark-purple rounded-xl p-6">
                   <div className="flex items-center justify-between mb-4">
                     <div className="flex-1">
                       <div className="flex items-center space-x-3 flex-wrap mb-2">
@@ -760,7 +760,7 @@ export default function ToolDownloader({
               </div> */}
 
                 {/* ImageMagick Card */}
-                <div className="bg-lighter-bg border-2 border-dark-purple rounded-xl p-6">
+                <div className="bg-white border-2 border-dark-purple rounded-xl p-6">
                   <div className="flex items-center justify-between mb-4">
                     <div className="flex-1">
                       <div className="flex items-center space-x-3 flex-wrap mb-2">
