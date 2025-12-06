@@ -1,13 +1,5 @@
 name: Build Dev Release
 
-# Dev build workflow for private repository
-# Required Secrets:
-#   - UPDATER_GITHUB_PAT: Personal Access Token with 'repo' scope for private repo access
-#     This PAT is compiled into the dev build to allow the Tauri updater to fetch updates
-#     from the private GitHub releases
-#   - TAURI_SIGNING_PRIVATE_KEY: Tauri signing key for update verification
-#   - TAURI_SIGNING_PRIVATE_KEY_PASSWORD: Password for the signing key
-
 on:
   workflow_dispatch:
 
@@ -85,62 +77,13 @@ jobs:
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-          GITHUB_PAT: ${{ secrets.UPDATER_GITHUB_PAT }}
         run: npm run tauri build -- --config src-tauri/tauri.conf.dev.json --features dev-build
-
-      - name: Sign Windows executables with Azure Trusted Signing
-        if: matrix.platform == 'windows-latest'
-        uses: azure/trusted-signing-action@v0
-        with:
-          azure-tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-          azure-client-id: ${{ secrets.AZURE_CLIENT_ID }}
-          azure-client-secret: ${{ secrets.AZURE_CLIENT_SECRET }}
-          endpoint: ${{ secrets.AZURE_ENDPOINT }}
-          trusted-signing-account-name: ${{ secrets.AZURE_CODE_SIGNING_NAME }}
-          certificate-profile-name: ${{ secrets.AZURE_CERT_PROFILE_NAME }}
-          files-folder: src-tauri/target/release/bundle
-          files-folder-filter: exe,msi
-          files-folder-recurse: true
-          file-digest: SHA256
-          timestamp-rfc3161: http://timestamp.acs.microsoft.com
-          timestamp-digest: SHA256
-
-      - name: Regenerate Tauri signatures after code signing (Windows)
-        if: matrix.platform == 'windows-latest'
-        shell: pwsh
-        env:
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-        run: |
-          # Find and re-sign all exe and msi files after Azure code signing
-          $bundlePath = "src-tauri/target/release/bundle"
-
-          # Re-sign NSIS exe
-          $exeFiles = Get-ChildItem -Path "$bundlePath/nsis" -Filter "*.exe" -ErrorAction SilentlyContinue
-          foreach ($file in $exeFiles) {
-            Write-Host "Re-signing: $($file.FullName)"
-            # Remove old signature file
-            $sigFile = "$($file.FullName).sig"
-            if (Test-Path $sigFile) { Remove-Item $sigFile }
-            # Generate new signature
-            npx tauri signer sign --private-key "$env:TAURI_SIGNING_PRIVATE_KEY" --password "$env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD" "$($file.FullName)"
-          }
-
-          # Re-sign MSI
-          $msiFiles = Get-ChildItem -Path "$bundlePath/msi" -Filter "*.msi" -ErrorAction SilentlyContinue
-          foreach ($file in $msiFiles) {
-            Write-Host "Re-signing: $($file.FullName)"
-            $sigFile = "$($file.FullName).sig"
-            if (Test-Path $sigFile) { Remove-Item $sigFile }
-            npx tauri signer sign --private-key "$env:TAURI_SIGNING_PRIVATE_KEY" --password "$env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD" "$($file.FullName)"
-          }
 
       - name: Build Intel macOS
         if: matrix.platform == 'macos-latest'
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-          GITHUB_PAT: ${{ secrets.UPDATER_GITHUB_PAT }}
         run: npm run tauri build -- --target x86_64-apple-darwin --config src-tauri/tauri.conf.dev.json --features dev-build
 
       - name: Build Apple Silicon macOS
@@ -148,7 +91,6 @@ jobs:
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-          GITHUB_PAT: ${{ secrets.UPDATER_GITHUB_PAT }}
         run: npm run tauri build -- --target aarch64-apple-darwin --config src-tauri/tauri.conf.dev.json --features dev-build
 
       - name: Upload artifacts (macOS)

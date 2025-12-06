@@ -1951,6 +1951,13 @@ async fn execute_conversion(
                     command.arg("scale='min(256,iw)':'min(256,ih)':force_original_aspect_ratio=decrease");
                 }
                 
+                // MP4 format: Use compatible settings for broad playback support
+                if output_ext == "mp4" {
+                    command.arg("-pix_fmt").arg("yuv420p");
+                    command.arg("-profile:v").arg("main");
+                    command.arg("-movflags").arg("+faststart");
+                }
+                
                 // Add advanced options if provided
                 if let Some(options) = advanced_options {
                     let options_parts: Vec<&str> = options.split_whitespace().collect();
@@ -3944,33 +3951,7 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_http::init())
-        .plugin({
-            // For dev builds, add GitHub PAT for private repo access
-            #[cfg(feature = "dev-build")]
-            {
-                use reqwest::header::{HeaderMap, HeaderValue, AUTHORIZATION, ACCEPT, USER_AGENT};
-                
-                let mut builder = tauri_plugin_updater::Builder::new();
-                // The PAT is injected at compile time for dev builds
-                if let Some(pat) = option_env!("GITHUB_PAT") {
-                    if !pat.is_empty() {
-                        let mut headers = HeaderMap::new();
-                        if let Ok(auth_value) = HeaderValue::from_str(&format!("token {}", pat)) {
-                            headers.insert(AUTHORIZATION, auth_value);
-                        }
-                        headers.insert(ACCEPT, HeaderValue::from_static("application/octet-stream"));
-                        headers.insert(USER_AGENT, HeaderValue::from_static("ConvertSave-Dev-Updater"));
-                        builder = builder.headers(headers);
-                        info!("Dev build: Updater configured with GitHub PAT authentication");
-                    }
-                }
-                builder.build()
-            }
-            #[cfg(not(feature = "dev-build"))]
-            {
-                tauri_plugin_updater::Builder::new().build()
-            }
-        })
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .invoke_handler(tauri::generate_handler![
             get_available_formats,
             convert_file,

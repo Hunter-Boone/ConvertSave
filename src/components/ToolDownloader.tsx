@@ -594,8 +594,8 @@ export default function ToolDownloader({
                   Tools & Settings
                 </h1>
                 <p className="text-lg text-secondary">
-                  Convert the most formats when you install these open-source
-                  tools. We make it simple with one click!
+                  Download these open-source tools to support the most file
+                  formats.
                 </p>
               </div>
 
